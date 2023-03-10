@@ -6,7 +6,7 @@ const fieldOfView = 45 * Math.PI / 180;
 const zNear = 0.1;
 const zFar = 1000.0;
 
-var eye    = vec3.fromValues(0.0, 0.0, 15.0);
+var eye    = vec3.fromValues(0.0, 0.0, 30.0);
 var center = vec3.fromValues(0, 0, 0);
 var up     = vec3.fromValues(0, 1, 0);
 var luzpos = vec3.fromValues(0.0, 10.0, 0.0);
