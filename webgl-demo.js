@@ -9,7 +9,7 @@ const zFar = 1000.0;
 var eye    = vec3.fromValues(0.0, 0.0, 20.0);
 var center = vec3.fromValues(0, 0, 0);
 var up     = vec3.fromValues(0, 1, 0);
-var luzpos = vec3.fromValues(0.0, 10.0, 0.0);
+var luzpos = vec3.fromValues(0.0, 700.0, 0.0);
 
 var cant_puntos_esfera;
 
@@ -19,12 +19,14 @@ canvas.height=window.innerHeight;
 document.body.appendChild(canvas);
 
 //const canvas = document.querySelector('#glcanvas');
-const gl = canvas.getContext('webgl2');
+const gl = canvas.getContext('webgl2');//, {preserveDrawingBuffer: true} para hacer captura
 
 
 var cuerpo1 = new Array();
 var cuerpo2 = new Array();
 var cuerpo3 = new Array();
+
+//var u = [ 0.97000436, -0.24308753, 0.0, -0.466203685 , -0.43236573, 0.0, -0.97000436,  0.24308753, 0.0, -0.466203685 , -0.43236573, 0.0, 0.0, 0.0, 0.0,  0.93240737  ,  0.86473146, 0.0  ];
 
 var u = [ 0.97000436, -0.24308753, 0.0, -0.466203685 , -0.43236573, 0.0, -0.97000436,  0.24308753, 0.0, -0.466203685 , -0.43236573, 0.0, 0.0, 0.0, 0.0,  0.93240737  ,  0.86473146, 0.0  ];
 var du= [  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  ];
@@ -62,26 +64,19 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform float u_time;
 
-vec3 pos_nueva;
-vec3 normal_nueva;
-float deltaxz = 0.1;
-vec3 dX, dZ;
 
+vec4 mod289(vec4 x) {
+  return x - floor(x * (1.0 / 289.0)) * 289.0; }
 
+float mod289(float x) {
+  return x - floor(x * (1.0 / 289.0)) * 289.0; }
 
-vec3 mod289(vec3 x)
-{
-  return x - floor(x * (1.0 / 289.0)) * 289.0;
+vec4 permute(vec4 x) {
+     return mod289(((x*34.0)+1.0)*x);
 }
 
-vec4 mod289(vec4 x)
-{
-  return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec4 permute(vec4 x)
-{
-  return mod289(((x*34.0)+10.0)*x);
+float permute(float x) {
+     return mod289(((x*34.0)+1.0)*x);
 }
 
 vec4 taylorInvSqrt(vec4 r)
@@ -89,159 +84,112 @@ vec4 taylorInvSqrt(vec4 r)
   return 1.79284291400159 - 0.85373472095314 * r;
 }
 
-vec3 fade(vec3 t) {
-  return t*t*t*(t*(t*6.0-15.0)+10.0);
-}
-
-// Classic Perlin noise
-float cnoise(vec3 P)
+float taylorInvSqrt(float r)
 {
-  vec3 Pi0 = floor(P); // Integer part for indexing
-  vec3 Pi1 = Pi0 + vec3(1.0); // Integer part + 1
-  Pi0 = mod289(Pi0);
-  Pi1 = mod289(Pi1);
-  vec3 Pf0 = fract(P); // Fractional part for interpolation
-  vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
-  vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
-  vec4 iy = vec4(Pi0.yy, Pi1.yy);
-  vec4 iz0 = Pi0.zzzz;
-  vec4 iz1 = Pi1.zzzz;
-
-  vec4 ixy = permute(permute(ix) + iy);
-  vec4 ixy0 = permute(ixy + iz0);
-  vec4 ixy1 = permute(ixy + iz1);
-
-  vec4 gx0 = ixy0 * (1.0 / 7.0);
-  vec4 gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
-  gx0 = fract(gx0);
-  vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
-  vec4 sz0 = step(gz0, vec4(0.0));
-  gx0 -= sz0 * (step(0.0, gx0) - 0.5);
-  gy0 -= sz0 * (step(0.0, gy0) - 0.5);
-
-  vec4 gx1 = ixy1 * (1.0 / 7.0);
-  vec4 gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
-  gx1 = fract(gx1);
-  vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
-  vec4 sz1 = step(gz1, vec4(0.0));
-  gx1 -= sz1 * (step(0.0, gx1) - 0.5);
-  gy1 -= sz1 * (step(0.0, gy1) - 0.5);
-
-  vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
-  vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
-  vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
-  vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
-  vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
-  vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
-  vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
-  vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
-
-  vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
-  g000 *= norm0.x;
-  g010 *= norm0.y;
-  g100 *= norm0.z;
-  g110 *= norm0.w;
-  vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
-  g001 *= norm1.x;
-  g011 *= norm1.y;
-  g101 *= norm1.z;
-  g111 *= norm1.w;
-
-  float n000 = dot(g000, Pf0);
-  float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
-  float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
-  float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
-  float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
-  float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
-  float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
-  float n111 = dot(g111, Pf1);
-
-  vec3 fade_xyz = fade(Pf0);
-  vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
-  vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
-  float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x);
-  return 2.2 * n_xyz;
+  return 1.79284291400159 - 0.85373472095314 * r;
 }
 
-// Classic Perlin noise, periodic variant
-float pnoise(vec3 P, vec3 rep)
-{
-  vec3 Pi0 = mod(floor(P), rep); // Integer part, modulo period
-  vec3 Pi1 = mod(Pi0 + vec3(1.0), rep); // Integer part + 1, mod period
-  Pi0 = mod289(Pi0);
-  Pi1 = mod289(Pi1);
-  vec3 Pf0 = fract(P); // Fractional part for interpolation
-  vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
-  vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
-  vec4 iy = vec4(Pi0.yy, Pi1.yy);
-  vec4 iz0 = Pi0.zzzz;
-  vec4 iz1 = Pi1.zzzz;
+vec4 grad4(float j, vec4 ip)
+  {
+  const vec4 ones = vec4(1.0, 1.0, 1.0, -1.0);
+  vec4 p,s;
 
-  vec4 ixy = permute(permute(ix) + iy);
-  vec4 ixy0 = permute(ixy + iz0);
-  vec4 ixy1 = permute(ixy + iz1);
+  p.xyz = floor( fract (vec3(j) * ip.xyz) * 7.0) * ip.z - 1.0;
+  p.w = 1.5 - dot(abs(p.xyz), ones.xyz);
+  s = vec4(lessThan(p, vec4(0.0)));
+  p.xyz = p.xyz + (s.xyz*2.0 - 1.0) * s.www;
 
-  vec4 gx0 = ixy0 * (1.0 / 7.0);
-  vec4 gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
-  gx0 = fract(gx0);
-  vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
-  vec4 sz0 = step(gz0, vec4(0.0));
-  gx0 -= sz0 * (step(0.0, gx0) - 0.5);
-  gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+  return p;
+  }
 
-  vec4 gx1 = ixy1 * (1.0 / 7.0);
-  vec4 gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
-  gx1 = fract(gx1);
-  vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
-  vec4 sz1 = step(gz1, vec4(0.0));
-  gx1 -= sz1 * (step(0.0, gx1) - 0.5);
-  gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+// (sqrt(5) - 1)/4 = F4, used once below
+#define F4 0.309016994374947451
 
-  vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
-  vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
-  vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
-  vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
-  vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
-  vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
-  vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
-  vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+float snoise(vec4 v)
+  {
+  const vec4  C = vec4( 0.138196601125011,  // (5 - sqrt(5))/20  G4
+                        0.276393202250021,  // 2 * G4
+                        0.414589803375032,  // 3 * G4
+                       -0.447213595499958); // -1 + 4 * G4
 
-  vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
-  g000 *= norm0.x;
-  g010 *= norm0.y;
-  g100 *= norm0.z;
-  g110 *= norm0.w;
-  vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
-  g001 *= norm1.x;
-  g011 *= norm1.y;
-  g101 *= norm1.z;
-  g111 *= norm1.w;
+// First corner
+  vec4 i  = floor(v + dot(v, vec4(F4)) );
+  vec4 x0 = v -   i + dot(i, C.xxxx);
 
-  float n000 = dot(g000, Pf0);
-  float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
-  float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
-  float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
-  float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
-  float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
-  float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
-  float n111 = dot(g111, Pf1);
+// Other corners
 
-  vec3 fade_xyz = fade(Pf0);
-  vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
-  vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
-  float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x);
-  return 2.2 * n_xyz;
-}
+// Rank sorting originally contributed by Bill Licea-Kane, AMD (formerly ATI)
+  vec4 i0;
+  vec3 isX = step( x0.yzw, x0.xxx );
+  vec3 isYZ = step( x0.zww, x0.yyz );
+//  i0.x = dot( isX, vec3( 1.0 ) );
+  i0.x = isX.x + isX.y + isX.z;
+  i0.yzw = 1.0 - isX;
+//  i0.y += dot( isYZ.xy, vec2( 1.0 ) );
+  i0.y += isYZ.x + isYZ.y;
+  i0.zw += 1.0 - isYZ.xy;
+  i0.z += isYZ.z;
+  i0.w += 1.0 - isYZ.z;
+
+  // i0 now contains the unique values 0,1,2,3 in each channel
+  vec4 i3 = clamp( i0, 0.0, 1.0 );
+  vec4 i2 = clamp( i0-1.0, 0.0, 1.0 );
+  vec4 i1 = clamp( i0-2.0, 0.0, 1.0 );
+
+  //  x0 = x0 - 0.0 + 0.0 * C.xxxx
+  //  x1 = x0 - i1  + 1.0 * C.xxxx
+  //  x2 = x0 - i2  + 2.0 * C.xxxx
+  //  x3 = x0 - i3  + 3.0 * C.xxxx
+  //  x4 = x0 - 1.0 + 4.0 * C.xxxx
+  vec4 x1 = x0 - i1 + C.xxxx;
+  vec4 x2 = x0 - i2 + C.yyyy;
+  vec4 x3 = x0 - i3 + C.zzzz;
+  vec4 x4 = x0 + C.wwww;
+
+// Permutations
+  i = mod289(i);
+  float j0 = permute( permute( permute( permute(i.w) + i.z) + i.y) + i.x);
+  vec4 j1 = permute( permute( permute( permute (
+             i.w + vec4(i1.w, i2.w, i3.w, 1.0 ))
+           + i.z + vec4(i1.z, i2.z, i3.z, 1.0 ))
+           + i.y + vec4(i1.y, i2.y, i3.y, 1.0 ))
+           + i.x + vec4(i1.x, i2.x, i3.x, 1.0 ));
+
+// Gradients: 7x7x6 points over a cube, mapped onto a 4-cross polytope
+// 7*7*6 = 294, which is close to the ring size 17*17 = 289.
+  vec4 ip = vec4(1.0/294.0, 1.0/49.0, 1.0/7.0, 0.0) ;
+
+  vec4 p0 = grad4(j0,   ip);
+  vec4 p1 = grad4(j1.x, ip);
+  vec4 p2 = grad4(j1.y, ip);
+  vec4 p3 = grad4(j1.z, ip);
+  vec4 p4 = grad4(j1.w, ip);
+
+// Normalise gradients
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+  p0 *= norm.x;
+  p1 *= norm.y;
+  p2 *= norm.z;
+  p3 *= norm.w;
+  p4 *= taylorInvSqrt(dot(p4,p4));
+
+// Mix contributions from the five corners
+  vec3 m0 = max(0.6 - vec3(dot(x0,x0), dot(x1,x1), dot(x2,x2)), 0.0);
+  vec2 m1 = max(0.6 - vec2(dot(x3,x3), dot(x4,x4)            ), 0.0);
+  m0 = m0 * m0;
+  m1 = m1 * m1;
+  return 49.0 * ( dot(m0*m0, vec3( dot( p0, x0 ), dot( p1, x1 ), dot( p2, x2 )))
+               + dot(m1*m1, vec2( dot( p3, x3 ), dot( p4, x4 ) ) ) ) ;
+
+  }
 
 
-
-
-
-
-
-vec2 pos_horizontal;
 
 void main(){
+	
+    vec3 pos_nueva;
+    vec3 normal_nueva;	
+    vec2 pos_horizontal;
 
     //pos_nueva = (1.0+0.5*sin(u_time))*aPos;
     //pos_nueva = aPos - (1.0+sin(u_time))*aNormal;
@@ -262,25 +210,51 @@ void main(){
     //pos_nueva = vec3(  u_time, u_time, u_time  );// aPos.x, aPos.y, aPos.z
     //pos_nueva.y = cnoise( pos_nueva );
 	//pos_nueva = aPos+ 0.2*cnoise( 4.0*aPos )*aNormal + 0.1*cnoise( 8.0*aPos )*aNormal+ 0.05*cnoise( 16.0*aPos )*aNormal;
-	pos_nueva = aPos + 0.2*cnoise( 4.0*aPos )*aNormal;
-	//
+	
+	float tiempo = 0.25*u_time;
+	pos_nueva  = aPos + 0.2*snoise( vec4(aPos, tiempo ) )*aNormal;
+	pos_nueva +=      0.1*snoise( 2.0*vec4(aPos, tiempo ) )*aNormal;
+	pos_nueva +=     0.05*snoise( 4.0*vec4(aPos, tiempo ) )*aNormal;
+	pos_nueva +=    0.025*snoise( 8.0*vec4(aPos, tiempo ) )*aNormal;
+	pos_nueva +=  0.0125*snoise( 16.0*vec4(aPos, tiempo ) )*aNormal;
+	
 	//pos_nueva = pos_nueva + 0.5*cnoise( vec3( length(vec2(pos_nueva.x, pos_nueva.z)),pos_nueva.y, u_time) )*aNormal;
-	pos_nueva = pos_nueva + 0.5*cnoise( vec3( pos_nueva.x, pos_nueva.y, u_time) )*aNormal;
-	pos_nueva = pos_nueva + 0.2*cnoise( 4.0*pos_nueva )*aNormal + 0.1*cnoise( 8.0*pos_nueva )*aNormal+ 0.05*cnoise( 16.0*pos_nueva )*aNormal;
+	
+	//pos_nueva = pos_nueva + 0.5*cnoise( vec3( pos_nueva.x, pos_nueva.y, u_time) )*aNormal;
+	//pos_nueva = pos_nueva + 0.2*cnoise( 4.0*pos_nueva )*aNormal + 0.1*cnoise( 8.0*pos_nueva )*aNormal+ 0.05*cnoise( 16.0*pos_nueva )*aNormal;
 	
 
-    dX = vec3( aPos.x + deltaxz, u_time, aPos.z );
-    dZ = vec3( aPos.x, u_time, aPos.z + deltaxz );
-    dX.y = cnoise( dX );
-    dZ.y = cnoise( dZ );
-    normal_nueva = normalize(cross(dZ - pos_nueva, dX - pos_nueva));
+
+	
+	vec3 delta1, delta2;
+	float r = length(aPos);
+
+	float theta = acos(aPos.y / r);
+	float phi = atan(aPos.z, aPos.x);
+	delta1.x = r * sin(theta+0.05) * cos(phi);
+	delta1.y = r * cos(theta+0.05);
+	delta1.z = r * sin(theta+0.05) * sin(phi);
+	delta2.x = r * sin(theta) * cos(phi+0.1);
+	delta2.y = r * cos(theta);
+	delta2.z = r * sin(theta) * sin(phi+0.1);
+	
+	delta1 = delta1 + 0.2*snoise( vec4(delta1, u_time ) )*normalize(delta1);
+	delta2 = delta2 + 0.2*snoise( vec4(delta2, u_time ) )*normalize(delta2);
+	
+	
+	
+	normal_nueva = normalize(cross(delta1-aPos,delta2-aPos));
+
+	
+	//Normal = vec3(normal_nueva.x, normal_nueva.y, normal_nueva.z);
+	
 
 
 
 
 
-	FragPos = vec3(model * vec4(pos_nueva, 1.0));//pos_nueva
-	Normal = mat3(transpose(inverse(model))) * normal_nueva;	//normal_nueva
+	FragPos = vec3(model * vec4(pos_nueva, 1.0));				//aPos
+	Normal = mat3(transpose(inverse(model))) * aNormal ;	//normal_nueva|aNormal
 	 
 
 	ColorVertice = aColor;
@@ -337,7 +311,7 @@ uniform float u_time;
 uniform vec3 cuerPos;
 uniform mat4 model;
 
-vec3 varColorVertice = vec3(0.0);
+
 vec3 hsv2rgb(vec3 c)
 {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -345,9 +319,28 @@ vec3 hsv2rgb(vec3 c)
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+vec3 palette( in float t)
+			{
+					vec3 a = vec3(0.5, 0.5, 0.5);
+					vec3 b = vec3(0.5, 0.5, 0.5);
+					vec3 c = vec3(1.0, 1.0, 1.0);
+					vec3 d = vec3(0.0, 0.33, 0.67);
+					return a + b*cos( 6.28318*(c*t+d) );
+			}
+
 void main(){
+	
+	// Calculate the partial derivatives of the fragment position
+    vec2 ddx = dFdx(FragPos.xy);
+    vec2 ddy = dFdy(FragPos.xy);
 
+    // Calculate the normal using the partial derivatives
+    vec3 ddx_fragPos3 = vec3(ddx, dFdx(FragPos.z));
+    vec3 ddy_fragPos3 = vec3(ddy, dFdy(FragPos.z));
+    vec3 reconstructedNormal = normalize(cross(ddx_fragPos3, ddy_fragPos3));
 
+	vec3 varColorVertice = vec3(0.0);
+	
 	vec3 ambient, diffuse, specular;
 
 
@@ -356,7 +349,7 @@ void main(){
 
 
     // diffuse
-    vec3 norm = normalize(Normal);
+    vec3 norm = normalize(reconstructedNormal);//Normal|reconstructedNormal
     vec3 luzDir = normalize(luz.position - FragPos);
     float diff = max(dot(norm, luzDir), 0.0);
     //vec3 diffuse = luz.diffuse* ( diff * material.diffuse);
@@ -385,16 +378,19 @@ void main(){
         //varColorVertice = 0.5+ 0.5*(1.0+sin(10.0*u_time))*ColorVertice;//video publicado
         //varColorVertice = vec3(0.5*(1.0+sin(u_time)), 1.0, 1.0);
 
-        varColorVertice = vec3(fract(0.25*u_time), 0.5 + 0.1*sin(u_time), 1.0);
+        //varColorVertice = vec3(fract(0.25*u_time), 0.5 + 0.1*sin(u_time), 1.0);
         //varColorVertice = vec3(fract(0.25*FragPos.y+0.25*u_time), 0.5,  1.0 );
         //varColorVertice = vec3(fract(0.05*length(FragPos)+ u_time), 0.5 , 1.0 );       //fract(sqrt(FragPos.x*FragPos.x+FragPos.z*FragPos.z) );
-		varColorVertice = vec3(0.5*sin(u_time)+0.5, 0.5, 1.0);
-		//varColorVertice = hsv2rgb( varColorVertice );
-		varColorVertice = vec3(0.5*sin(u_time)+0.5, 0.5, 0.0);
-		varColorVertice = vec3(ColorVertice);
+		 //varColorVertice = vec3(0.5*sin(u_time)+0.5, 0.5, 1.0);
+		 //varColorVertice = hsv2rgb( varColorVertice );
+		 //varColorVertice = vec3(0.5*sin(u_time)+0.5, 0.5, 0.0);
+	
 		
-		varColorVertice = vec3(length(FragPos-vec3(model * vec4(0.0,0.0,0.0, 1.0))), 0.5, 0.5);//sqrt(FragPos.x*FragPos.x+FragPos.y*FragPos.y+FragPos.z*FragPos.z)
-		varColorVertice = hsv2rgb(varColorVertice);
+		//varColorVertice = vec3(length(FragPos-vec3(model * vec4(0.0,0.0,0.0, 1.0))), 0.5, 0.5);//sqrt(FragPos.x*FragPos.x+FragPos.y*FragPos.y+FragPos.z*FragPos.z)
+		//varColorVertice = hsv2rgb(varColorVertice);
+		
+		//varColorVertice = vec3(ColorVertice);
+		varColorVertice = palette(  sin(u_time) + dot(Normal, FragPos-vec3(model * vec4(0.0,0.0,0.0, 1.0))) );//sin(u_time) +
 
 
         ambient  = luz.ambient * varColorVertice;
@@ -419,259 +415,79 @@ void main(){
 
 	FragColor = vec4(result, AlfaUL);
 
-}
-  `;
+		}
+	  `;
 
-  const shaderProgram = initShaderProgram(vsSource, fsSource);
+	  const shaderProgram = initShaderProgram(vsSource, fsSource);
 
 
-  const programInfo = {
-    program: shaderProgram,
-    attribLocations: {
-      vertexPosition: gl.getAttribLocation(shaderProgram, 'aPos'),
-      vertexColor: gl.getAttribLocation(shaderProgram, 'aColor'),
-	  vertexNormal: gl.getAttribLocation(shaderProgram, 'aNormal'),
-	  vertexTexture: gl.getAttribLocation(shaderProgram, 'aTexCoord'),	  
-    },
-    uniformLocations: {      
-      modelMatrix: gl.getUniformLocation(shaderProgram, 'model'),
-	  viewMatrix: gl.getUniformLocation(shaderProgram, 'view'),
-	  projectionMatrix: gl.getUniformLocation(shaderProgram, 'projection'),
-	  uniformTime: gl.getUniformLocation(shaderProgram, 'u_time'),
-	  uniformPosition: gl.getUniformLocation(shaderProgram, 'viewPos'),
-	  uniformLightPos: gl.getUniformLocation(shaderProgram, 'luz.position'),
-      uniformLightAmbient: gl.getUniformLocation(shaderProgram, 'luz.ambient'),
-      uniformLightDiff: gl.getUniformLocation(shaderProgram, 'luz.diffuse'),
-      uniformLightSpec: gl.getUniformLocation(shaderProgram, 'luz.specular'),
-      uniformLightConst: gl.getUniformLocation(shaderProgram, 'luz.constant'),
-      uniformLightLinear: gl.getUniformLocation(shaderProgram, 'luz.linear'),
-      uniformLightQuad: gl.getUniformLocation(shaderProgram, 'luz.quadratics'),	  
-	  uniformMaterialtAmbient: gl.getUniformLocation(shaderProgram, 'material.ambient'),
-      uniformMaterialDiff: gl.getUniformLocation(shaderProgram, 'material.diffuse'),
-      uniformMaterialSpec: gl.getUniformLocation(shaderProgram, 'material.specular'),
-	  uniformMaterialShini: gl.getUniformLocation(shaderProgram, 'material.shininess'),
-	  uniformUsarAtributoColor: gl.getUniformLocation(shaderProgram, 'UsarAtributoColor'),
-	  uniformAlphaChannel: gl.getUniformLocation(shaderProgram, 'AlfaUL'),
-	  uniformCuerPosition: gl.getUniformLocation(shaderProgram, 'cuerPos')
+	  const programInfo = {
+		program: shaderProgram,
+		attribLocations: {
+		  vertexPosition: gl.getAttribLocation(shaderProgram, 'aPos'),
+		  vertexColor: gl.getAttribLocation(shaderProgram, 'aColor'),
+		  vertexNormal: gl.getAttribLocation(shaderProgram, 'aNormal'),
+		  vertexTexture: gl.getAttribLocation(shaderProgram, 'aTexCoord'),	  
+		},
+		uniformLocations: {      
+		  modelMatrix: gl.getUniformLocation(shaderProgram, 'model'),
+		  viewMatrix: gl.getUniformLocation(shaderProgram, 'view'),
+		  projectionMatrix: gl.getUniformLocation(shaderProgram, 'projection'),
+		  uniformTime: gl.getUniformLocation(shaderProgram, 'u_time'),
+		  uniformPosition: gl.getUniformLocation(shaderProgram, 'viewPos'),
+		  uniformLightPos: gl.getUniformLocation(shaderProgram, 'luz.position'),
+		  uniformLightAmbient: gl.getUniformLocation(shaderProgram, 'luz.ambient'),
+		  uniformLightDiff: gl.getUniformLocation(shaderProgram, 'luz.diffuse'),
+		  uniformLightSpec: gl.getUniformLocation(shaderProgram, 'luz.specular'),
+		  uniformLightConst: gl.getUniformLocation(shaderProgram, 'luz.constant'),
+		  uniformLightLinear: gl.getUniformLocation(shaderProgram, 'luz.linear'),
+		  uniformLightQuad: gl.getUniformLocation(shaderProgram, 'luz.quadratics'),	  
+		  uniformMaterialtAmbient: gl.getUniformLocation(shaderProgram, 'material.ambient'),
+		  uniformMaterialDiff: gl.getUniformLocation(shaderProgram, 'material.diffuse'),
+		  uniformMaterialSpec: gl.getUniformLocation(shaderProgram, 'material.specular'),
+		  uniformMaterialShini: gl.getUniformLocation(shaderProgram, 'material.shininess'),
+		  uniformUsarAtributoColor: gl.getUniformLocation(shaderProgram, 'UsarAtributoColor'),
+		  uniformAlphaChannel: gl.getUniformLocation(shaderProgram, 'AlfaUL'),
+		  uniformCuerPosition: gl.getUniformLocation(shaderProgram, 'cuerPos')
+		  
+		  
+		}
+	  };
+  
+
+  
+	  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
 	  
+	  mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
+	  mat4.lookAt(viewMatrix, eye, center, up);
+
+
+	  initBuffers(gl, programInfo);
+	  const vao = CrearEsferaVAO(gl, programInfo);
+
+	  var then = 0;
+
+	  function render(now)
+		{
+		now *= 0.001;  // convertir a segundos
+		const deltaTime = now - then;
+		then = now;
+
+		drawScene(gl, programInfo, vao, deltaTime, now);
+
+		requestAnimationFrame(render);
+		}
 	  
-    }
-  };
-  
+	  requestAnimationFrame(render);
+}//fin de la declaración de la función main()
 
-  
-  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-  
-  mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
-  mat4.lookAt(viewMatrix, eye, center, up);
+function CrearEsferaVAO(gl, programInfo){
 
+	//El límite máximo para el valor de un índice es 2^16 = 65k, por lo tanto no pueden hacerse una drawcall con una lista de índices que supere este valores,
+    //Por tanto la cantidad de puntos diferentes que usa la maya no puede ser mayor a 65k y si es una maya cuadrada serían 256x256 como máximo o 362x181 para mantener un lado el doble que el alto
 
-  const vao = initBuffers(gl, programInfo);
-  //const vaoesfera = CrearEsferaVAO(gl, programInfo);
-
-  var then = 0;
-
-  function render(now) {
-    now *= 0.001;  // convert to seconds
-    const deltaTime = now - then;
-    then = now;
-
-    drawScene(gl, programInfo, vao, deltaTime, now);
-
-    requestAnimationFrame(render);
-  }
-  
-  requestAnimationFrame(render);
-  }
-
-function CrearEsferaVAO(programInfo){
-
-    var num_lon = 14, num_lat = 7, num_puntos;
-    var lat, lon, x, y, z;
-
-    num_puntos = num_lat*num_lon + 2;//sumar 2 por los polos
-    cant_puntos_esfera = 2*3*num_lon*num_lat;
-
-
-    var vertices = [];	//	3*num_puntos
-    var normales = [];	//	3*num_puntos
-    var  colores = [];	//	3*num_puntos
-    var  indices = [];	//	2*3*(num_lon)*(num_lat)
-	var   puntos = [];
-
-	let polonorte = {
-		"x": 0.0,
-		"y": 0.0,
-		"z": 1.0
-	};
-
-	let polosur = {
-		"x": 0.0,
-		"y": 0.0,
-		"z": -1.0
-	};
-	
-    puntos.push(polonorte);
-	let obj_punto = {};
-    for ( let paral = 1; paral <= num_lat; paral++)
-        for ( let merid = 0; merid < num_lon; merid++){
-
-            lat = 0.5*Math.PI - Math.PI*paral/num_lat+1;
-            lon = 2.0*Math.PI*merid/num_lon;
-
-
-            x = Math.cos(lon)*Math.cos(lat);
-            y = Math.sin(lon)*Math.cos(lat);
-            z = Math.sin(lat);
-			
-			obj_punto.x = x;  // = {"x" : x, "y" : y, "z" : z };
-			obj_punto.y = y;
-			obj_punto.z = z;
-
-            puntos.push(obj_punto);
-    }
-    puntos.push(polosur);
-
-
-    var n = 0;
-    for( let i = 0 ; i < num_puntos ; i++){
-
-            vertices[n]   = puntos[i].x;
-            vertices[n+1] = puntos[i].z;
-            vertices[n+2] = puntos[i].y;
-
-            colores[n]   = 1.0;
-            colores[n+1] = 1.0;
-            colores[n+2] = 1.0;
-
-            normales[n]   = puntos[i].x;
-            normales[n+1] = puntos[i].z;
-            normales[n+2] = puntos[i].y;
-
-            n += 3;
-        }
-
-
-    //INDICES:
-    var v1, v2, v3, v4;
-    //Polo norte:
-    for( let i = 1 ; i < num_lon; i++){
-
-            v1 = 0;
-            v2 = i;
-            v3 = v2 + 1;
-            indices.push(v1);
-            indices.push(v2);
-            indices.push(v3);
-
-        }
-    indices.push(0);
-    indices.push(v3);
-    indices.push(1);
-
-
-
-    //BANDA CENTRAL
-    for ( let i = 0; i < num_lat - 1; i++)
-        {
-        for ( let j = 1; j < num_lon; j++){
-
-            v1 = j + i*num_lon;
-            v2 = v1 + num_lon;
-            v3 = v1 + 1;
-            indices.push(v1);
-            indices.push(v2);
-            indices.push(v3);
-
-            v4 = v2 + 1;
-            indices.push(v3);
-            indices.push(v2);
-            indices.push(v4);
-
-            }
-        v1 = v3;
-        v2 = v4;
-        v3 = v1 - num_lon + 1;
-        indices.push(v1);
-        indices.push(v2);
-        indices.push(v3);
-        v4 = v2 - num_lon + 1;
-        indices.push(v3);
-        indices.push(v2);
-        indices.push(v4);
-
-
-        }
-    //Polo sur:
-
-    for( let i = 0 ; i < num_lon -1; i++){
-
-            v1 = num_puntos - 1 - num_lon  + i;
-            v2 = v1 + 1;
-            v3 = num_puntos - 1;
-            indices.push(v1);
-            indices.push(v2);
-            indices.push(v3);
-        }
-    indices.push(v2);
-    indices.push(v2 - num_lon + 1);
-    indices.push(num_puntos - 1);
-	
-	var vao = CrearVAO(gl, programInfo, vertices, normales, colores, indices);
-	return vao;
-};
-
-function CrearVAO(programInfo, vertices, normales, colores, indices ){
-	
-  var vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-
-  var numComponents = 3;
-  var type = gl.FLOAT;
-  var normalize = false;
-  var stride = 0;
-  var offset = 0;
-
-  const positionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray( programInfo.attribLocations.vertexPosition);
-  gl.vertexAttribPointer( programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
-  
-
-  const colorBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colores), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray( programInfo.attribLocations.vertexColor);
-  gl.vertexAttribPointer( programInfo.attribLocations.vertexColor, numComponents, type, normalize, stride, offset);
-  
-  
-  const normalBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normales), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray( programInfo.attribLocations.vertexNormal);
-  gl.vertexAttribPointer( programInfo.attribLocations.vertexNormal, numComponents, type, normalize, stride, offset);
-  
-
-
-  const indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-	  
-
-
-  gl.bindVertexArray(null);
-  
-  return vao;	
-	
-};
-
-
-
-function initBuffers(gl, programInfo) {
-
-    var num_lon = 36, num_lat = 18, num_puntos;
-    var lat, lon, x, y, z;
+    var num_lon = 362, num_lat = 181, num_puntos;
+	var lat, lon, x, y, z;
 
     num_puntos = num_lat*num_lon + 2;//sumar 2 por los polos
     cant_puntos_esfera = 2*3*num_lon*num_lat;
@@ -702,8 +518,7 @@ function initBuffers(gl, programInfo) {
             vertices.push(x, y, z);
 			normales.push(x, y, z);
 			var rgb = toRgb(360*(0.5*x+0.5), 0.5, 0.5);
-			colores.push(rgb.red, rgb.green, rgb.blue );
-			
+			colores.push(rgb.red, rgb.green, rgb.blue );			
 			//colores.push(Math.random(), Math.random(), Math.random());
     }
     vertices.push(0.0, 0.0, -1.0);
@@ -792,11 +607,12 @@ function initBuffers(gl, programInfo) {
 		_indices[i] = indices[i];
 		
 		}
+	
+	const vao = CrearVAO(gl, programInfo, _vertices, _normales, _colores, _indices);
+	return vao;
+};
 
-	console.log( gl.getParameter(gl.MAX_ELEMENT_INDEX) + " 1 " );
-	console.log( gl.getParameter(gl.MAX_ELEMENTS_VERTICES) + " 2" );
-	console.log( gl.getParameter(gl.MAX_ELEMENTS_INDICES) + " 3" );
-	console.log( gl.getParameter(gl.MAX_ELEMENT_INDEX) + " 4" );
+function CrearVAO(gl, programInfo, vertices, normales, colores, indices ){
 	
   var vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -809,21 +625,21 @@ function initBuffers(gl, programInfo) {
 
   const positionBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(_vertices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
   gl.enableVertexAttribArray( programInfo.attribLocations.vertexPosition);
   gl.vertexAttribPointer( programInfo.attribLocations.vertexPosition, numComponents, type, normalize, stride, offset);
   
 
   const colorBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(_colores), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colores), gl.STATIC_DRAW);
   gl.enableVertexAttribArray( programInfo.attribLocations.vertexColor);
   gl.vertexAttribPointer( programInfo.attribLocations.vertexColor, numComponents, type, normalize, stride, offset);
   
   
   const normalBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(_normales), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normales), gl.STATIC_DRAW);
   gl.enableVertexAttribArray( programInfo.attribLocations.vertexNormal);
   gl.vertexAttribPointer( programInfo.attribLocations.vertexNormal, numComponents, type, normalize, stride, offset);
   
@@ -831,12 +647,23 @@ function initBuffers(gl, programInfo) {
 
   const indexBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(_indices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 	  
-
 
   gl.bindVertexArray(null);
   
+  return vao;	
+	
+};
+
+
+
+function initBuffers(gl, programInfo) {
+	
+  console.log( gl.getParameter(gl.MAX_ELEMENT_INDEX) + " 1 " );
+  console.log( gl.getParameter(gl.MAX_ELEMENTS_VERTICES) + " 2" );
+  console.log( gl.getParameter(gl.MAX_ELEMENTS_INDICES) + " 3" );
+
   gl.useProgram(programInfo.program);
   
   let ambienColor   = vec3.fromValues( 1.0 , 1.0 , 1.0 );
@@ -858,20 +685,13 @@ function initBuffers(gl, programInfo) {
   
   gl.uniform1f( programInfo.uniformLocations.uniformAlphaChannel, 1.0 );
   gl.uniform1i( programInfo.uniformLocations.uniformUsarAtributoColor, 1 );
-  
-  
-  
-  
 
-  
+
   gl.uniformMatrix4fv( programInfo.uniformLocations.projectionMatrix, false, projectionMatrix); 
   gl.uniformMatrix4fv( programInfo.uniformLocations.viewMatrix, false, viewMatrix);
   
   gl.uniform3fv( programInfo.uniformLocations.uniformPosition, eye );
   gl.uniform3fv( programInfo.uniformLocations.uniformLightPos, luzpos );
-
-
-  return vao; 
 
 }
 
@@ -900,15 +720,6 @@ function drawScene(gl, programInfo, vao, deltaTime, currentTime) {
   gl.depthFunc(gl.LEQUAL);
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
- 
-  
-  //mat4.identity(modelMatrix);
-  //mat4.translate(modelMatrix, modelMatrix, [-0.0, 0.0, -6.0]);
-  //mat4.rotate(modelMatrix, modelMatrix, cubeRotation,      [0, 0, 1]);
-  //mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .7, [0, 1, 0]);
-  //mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .3, [1, 0, 0]);
-  //mat4.scale(modelMatrix, modelMatrix, [0.2*Math.cos(currentTime+1.0)+0.5, 0.2*Math.sin(currentTime)+0.5, 1.0]);
   
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);	
   gl.uniform1f( programInfo.uniformLocations.uniformTime, currentTime );
@@ -916,53 +727,101 @@ function drawScene(gl, programInfo, vao, deltaTime, currentTime) {
   
   gl.bindVertexArray(vao);
   
+
+  const type = gl.UNSIGNED_SHORT;
+  const offset = 0;
+
+
+
+  
+
   CalcularNuevasPosVel();
+  //DetectarColisiones();  
   
-  {
-    const vertexCount = 60;//36
-    const type = gl.UNSIGNED_SHORT;
-    const offset = 0;
-      /*gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);*/
-  
-  
-
-  
-
-  
-  //var translation = vec3.create();
-
-  //uniformCuerPosition
-  
+   /*
   mat4.identity(modelMatrix);
-  //vec3.set (translation, cuerpo1[0], cuerpo1[1], cuerpo1[2]);
-  //mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .7, [0, 1, 0]);
   mat4.translate(modelMatrix, modelMatrix, cuerpo1);//cuerpo1 en lugar de translation  
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
   gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);
   
   mat4.identity(modelMatrix);
-  //vec3.set (translation, cuerpo2[0], cuerpo2[1], cuerpo2[2]);
-  //mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .7, [1, 0, 0]);
   mat4.translate(modelMatrix, modelMatrix, cuerpo2);  
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
   gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);
   
   mat4.identity(modelMatrix);
-  //vec3.set (translation, cuerpo3[0], cuerpo3[1], cuerpo3[2]);
-  //mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .7, [0, 0, 1]);
   mat4.translate(modelMatrix, modelMatrix, cuerpo3);  
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
   gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);
-  
-  gl.bindVertexArray(null);
-  
-  }
+  */
   
   
+  mat4.identity(modelMatrix);  
+  mat4.translate(modelMatrix, modelMatrix, cuerpo1);
+  mat4.scale(modelMatrix, modelMatrix, [1.5,1.5,1.5]);
+  mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .8, [0, 1, 0]);
+  gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
+  gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);
   
+  
+  mat4.identity(modelMatrix);  
+  mat4.translate(modelMatrix, modelMatrix, cuerpo2);
+  mat4.scale(modelMatrix, modelMatrix, [1.5,1.5,1.5]);
+  mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .8, [0, 1, 0]);
+  gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
+  gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);
+
+  mat4.identity(modelMatrix);
+  mat4.translate(modelMatrix, modelMatrix, cuerpo3);
+  mat4.scale(modelMatrix, modelMatrix, [1.5,1.5,1.5]);
+  mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .8, [0, 1, 0]);
+  gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
+  gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);  
+  
+  
+  gl.bindVertexArray(null); 
 
   cubeRotation += deltaTime;
+
+if (needCapture) {
+    needCapture = false;
+    canvas.toBlob((blob) => {
+      saveBlob(blob, `screencapture-${canvas.width}x${canvas.height}.png`);
+    });
+  }
+
+
+
 }
+
+
+  const elem = document.querySelector('#screenshot');
+/*
+  elem.addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      saveBlob(blob, `screencapture-${canvas.width}x${canvas.height}.png`);
+    });
+  });
+*/
+
+let needCapture = false;
+elem.addEventListener('click', () => {
+   needCapture = true;
+});
+
+  const saveBlob = (function() {
+    const a = document.createElement('a');
+    document.body.appendChild(a);
+    a.style.display = 'none';
+    return function saveData(blob, fileName) {
+       const url = window.URL.createObjectURL(blob);
+       a.href = url;
+       a.download = fileName;
+       a.click();
+    };
+  }());
+
+
 
 
 function initShaderProgram(vsSource, fsSource) {
@@ -1102,22 +961,98 @@ function CalcularNuevasPosVel() {
 	//console.log(cuerpo1[0]);
 }
 
-function my_reflect(incidente, normal){
+function rebote(incidente, normal){
 	//dot(a, b)
 	//scale(out, a, b)
 	//subtract(out, a, b)	
 	//R = 2(N.L)N - L
 	
-	var reflection = vec3.fromValues(0, 0, 0);
+	var refleccion = vec3.fromValues(0, 0, 0);
 	var izquierda = vec3.fromValues(0, 0, 0);
 	
-	var escalar = 2.0*dot(normal, incidente);
+	var escalar = 2.0*vec3.dot(normal, incidente);
 	
-	scale(izquierda, normal ,escalar);
+	vec3.scale(izquierda, normal ,escalar);
 
-	subtract(reflection, izquierda, incidente);
+	vec3.subtract(refleccion, izquierda, incidente);
 	
-	return reflection;	
+	return refleccion;	
+}
+
+function DetectarColisiones(){
+	  r12 = Math.sqrt( ( u[6 ]-u[0])*(u[6 ]-u[0] ) + ( u[7 ]-u[1])*(u[7]-u[1 ] ) + ( u[8 ]-u[2])*(u[8 ]-u[2] )  );
+      r13 = Math.sqrt( ( u[12]-u[0])*(u[12]-u[0] ) + ( u[13]-u[1])*(u[13]-u[1] ) + ( u[14]-u[2])*(u[14]-u[2] )  );
+      r23 = Math.sqrt( ( u[12]-u[6])*(u[12]-u[6] ) + ( u[13]-u[7])*(u[13]-u[7] ) + ( u[14]-u[8])*(u[14]-u[8] )  );
+	  
+	  if(r12<0.2){
+			var normal12 = vec3.fromValues(u[6]-u[0], u[7]-u[1], u[8]-u[2]);
+			vec3.normalize(normal12, normal12);
+			var velocidad1 = vec3.fromValues(u[3], u[4], u[5]);
+			
+			var velocidad = vec3.fromValues(0, 0, 0);
+			
+			velocidad = rebote(velocidad1,normal12);
+			u[3] = velocidad[0];
+			u[4] = velocidad[1];
+			u[5] = velocidad[2];
+			
+			var normal21 = vec3.fromValues(0, 0, 0);
+			vec3.negate(normal21, normal12);
+			var velocidad2 = vec3.fromValues(u[9], u[10], u[11]);
+			
+			velocidad = rebote(velocidad2,normal21);
+			u[9] = velocidad[0];
+			u[10] = velocidad[1];
+			u[11] = velocidad[2];
+			
+			}
+	  if(r13<0.2){
+			var normal13 = vec3.fromValues(u[12]-u[0], u[13]-u[1], u[14]-u[2]);
+			vec3.normalize(normal13, normal13);
+			var velocidad1 = vec3.fromValues(u[3], u[4], u[5]);
+			
+			var velocidad = vec3.fromValues(0, 0, 0);
+			
+			velocidad = rebote(velocidad1,normal12);
+			u[3] = velocidad[0];
+			u[4] = velocidad[1];
+			u[5] = velocidad[2];
+			
+			var normal31 = vec3.fromValues(0, 0, 0);
+			vec3.negate(normal31, normal13);
+			var velocidad2 = vec3.fromValues(u[15], u[16], u[17]);
+			
+			velocidad = rebote(velocidad2,normal31);
+			u[15] = velocidad[0];
+			u[16] = velocidad[1];
+			u[17] = velocidad[2];
+			
+			}
+			
+	  if(r23<0.2){
+			var normal23 = vec3.fromValues(u[12]-u[6], u[13]-u[7], u[14]-u[8]);
+			vec3.normalize(normal23, normal23);
+			var velocidad1 = vec3.fromValues(u[9], u[10], u[11]);
+			
+			var velocidad = vec3.fromValues(0, 0, 0);
+			
+			velocidad = rebote(velocidad1,normal23);
+			u[9] = velocidad[0];
+			u[10] = velocidad[1];
+			u[11] = velocidad[2];
+			
+			var normal32 = vec3.fromValues(0, 0, 0);
+			vec3.negate(normal32, normal23);
+			var velocidad2 = vec3.fromValues(u[15], u[16], u[17]);
+			
+			velocidad = rebote(velocidad2,normal32);
+			u[15] = velocidad[0];
+			u[16] = velocidad[1];
+			u[17] = velocidad[2];
+			
+			}
+	
+	
 }
 
 
@@ -1125,5 +1060,70 @@ function resize_canvas(){
 	
 	canvas.width =window.innerWidth;
 	canvas.height=window.innerHeight;
+	gl.viewport(0, 0, canvas.width, canvas.height);
 	
+}
+
+
+// Initialize a texture and load an image.
+// When the image finished loading copy it into the texture.
+//
+function loadTexture(gl, url) {
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  // Because images have to be downloaded over the internet
+  // they might take a moment until they are ready.
+  // Until then put a single pixel in the texture so we can
+  // use it immediately. When the image has finished downloading
+  // we'll update the texture with the contents of the image.
+  const level = 0;
+  const internalFormat = gl.RGBA;
+  const width = 1;
+  const height = 1;
+  const border = 0;
+  const srcFormat = gl.RGBA;
+  const srcType = gl.UNSIGNED_BYTE;
+  const pixel = new Uint8Array([0, 0, 255, 255]); // opaque blue
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    level,
+    internalFormat,
+    width,
+    height,
+    border,
+    srcFormat,
+    srcType,
+    pixel
+  );
+
+  const image = new Image();
+  image.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      level,
+      internalFormat,
+      srcFormat,
+      srcType,
+      image
+    );
+
+    // WebGL1 has different requirements for power of 2 images
+    // vs non power of 2 images so check if the image is a
+    // power of 2 in both dimensions.
+    if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+      // Yes, it's a power of 2. Generate mips.
+      gl.generateMipmap(gl.TEXTURE_2D);
+    } else {
+      // No, it's not a power of 2. Turn off mips and set
+      // wrapping to clamp to edge
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
+  };
+  image.src = url;
+
+  return texture;
 }
