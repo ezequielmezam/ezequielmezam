@@ -41,24 +41,7 @@
       margin-right: auto;
       word-spacing: 2pt;
       color: white;
-      text-shadow:
-         -3px -0px 2px #000,
-         -2px -0px 2px #000,
-         -1px -0px 2px #000,
-          1px -0px 2px #000,
-          2px -0px 2px #000,
-          3px -0px 2px #000,
-          0px -3px 2px #000,
-          0px -2px 2px #000,
-          0px -1px 2px #000,
-          0px  1px 2px #000,
-          0px  2px 2px #000,
-          0px  3px 2px #000,
-         -3px -3px 2px #000,
-          3px -3px 2px #000,
-         -3px  3px 2px #000,
-          3px  3px 2px #000;
-    }
+
     a {
       color: lightblue;
     }
@@ -76,7 +59,7 @@
   <body>
     <div id="uiContainer">
   		<div id="ui" class="text-center">
-    			<button id="screenshot" type="button">Screenshot</button>
+    			<button id="screenshot" onclick="sendMessage()" type="button">Screenshot</button>
   		</div>
     </div>
     <iframe id="background" src="background.html"></iframe>	  
@@ -117,6 +100,11 @@ var countdownfunction = setInterval(function() {
     document.getElementById("demo").innerHTML = "EXPIRED";
   }
 }, 1000);
+
+
+function sendMessage2Iframe(){
+	background.contentWindow.postMessage('capturar', '*');
+}
 </script>
   </body>
 </html>
