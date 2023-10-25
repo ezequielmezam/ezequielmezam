@@ -63,7 +63,7 @@
     			<button id="screenshotBtn" type="button">Capturar fondo</button>
   		</div>
     </div>
-    <iframe id="background" src="background.html"></iframe>	  
+    <iframe id="backgroundIF" src="background.html"></iframe>	  
     <div id="content">   
       <h1>Ezequiel Meza</h1>
       <p>
@@ -107,7 +107,7 @@ var countdownfunction = setInterval(function() {
 
 document.addEventListener('DOMContentLoaded', function() {
     const cambiarVariableBtn = document.getElementById('screenshotBtn');
-    const miFrame = document.getElementById('miFrame');
+    const miFrame = document.getElementById('backgroundIF');
 
     cambiarVariableBtn.addEventListener('click', function() {
         const contenidoIFrame = miFrame.contentWindow;
