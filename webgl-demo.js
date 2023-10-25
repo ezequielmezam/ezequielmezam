@@ -763,8 +763,7 @@ function drawScene(gl, programInfo, vao, deltaTime, currentTime) {
   mat4.scale(modelMatrix, modelMatrix, [1.5,1.5,1.5]);
   mat4.rotate(modelMatrix, modelMatrix, cubeRotation * .8, [0, 1, 0]);
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelMatrix, false, modelMatrix);
-  gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);
-  
+  gl.drawElements(gl.TRIANGLES, cant_puntos_esfera, type, offset);  
   
   mat4.identity(modelMatrix);  
   mat4.translate(modelMatrix, modelMatrix, cuerpo2);
@@ -791,8 +790,6 @@ if (needCapture) {
       saveBlob(blob, `screencapture-${canvas.width}x${canvas.height}.png`);
     });
   }
-
-
 
 }//fin de función drawScene();
 
@@ -824,6 +821,11 @@ const saveBlob = (function() {
        a.click();
     };
   }());
+
+function setCapture(valor) {
+            needCapture = valor;
+            console.log('Variable needCapture en iFrame cambiada a:', needCapture);
+        }
 
 
 
