@@ -60,7 +60,7 @@
   <body>
     <div id="uiContainer">
   		<div id="ui" class="text-center">
-    			<button id="screenshot" onclick="sendMessage2Iframe()" type="button">Screenshot</button>
+    			<button id="screenshotBtn" type="button">Capturar fondo</button>
   		</div>
     </div>
     <iframe id="background" src="background.html"></iframe>	  
@@ -103,9 +103,17 @@ var countdownfunction = setInterval(function() {
 }, 1000);
 
 
-function sendMessage2Iframe(){
-	background.contentWindow.postMessage('capturar', '*');
-}
+//function sendMessage2Iframe(){background.contentWindow.postMessage('capturar', '*');}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const cambiarVariableBtn = document.getElementById('screenshotBtn');
+    const miFrame = document.getElementById('miFrame');
+
+    cambiarVariableBtn.addEventListener('click', function() {
+        const contenidoIFrame = miFrame.contentWindow;
+        contenidoIFrame.setCapture(true);
+    });
+});
 </script>
   </body>
 </html>
