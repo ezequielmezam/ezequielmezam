@@ -18,6 +18,8 @@ canvas.width =window.innerWidth;
 canvas.height=window.innerHeight;
 document.body.appendChild(canvas);
 
+var needCapture = false;
+
 //const canvas = document.querySelector('#glcanvas');
 const gl = canvas.getContext('webgl2');//, {preserveDrawingBuffer: true} para hacer captura
 
@@ -792,11 +794,16 @@ if (needCapture) {
 
 
 
-}
+}//fin de función drawScene();
 
 
-  const elem = document.querySelector('#screenshot');
 /*
+const elem = document.querySelector('#screenshot');
+elem.addEventListener('click', () => {
+   needCapture = true;
+});
+
+// o también:
   elem.addEventListener('click', () => {
     canvas.toBlob((blob) => {
       saveBlob(blob, `screencapture-${canvas.width}x${canvas.height}.png`);
@@ -804,12 +811,9 @@ if (needCapture) {
   });
 */
 
-let needCapture = false;
-elem.addEventListener('click', () => {
-   needCapture = true;
-});
 
-  const saveBlob = (function() {
+//función saveBlob para guardar captura de canvas
+const saveBlob = (function() {
     const a = document.createElement('a');
     document.body.appendChild(a);
     a.style.display = 'none';
