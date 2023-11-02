@@ -645,15 +645,23 @@ function CrearEsferaVAO(gl, programInfo){
             lon = (2.0*Math.PI*merid)/num_lon;
 
 
-            x = Math.cos(lon)*Math.cos(lat);
-            y = Math.sin(lon)*Math.cos(lat);
-            z = Math.sin(lat);
+            //x = Math.cos(lon)*Math.cos(lat);
+            //y = Math.sin(lon)*Math.cos(lat);
+            //z = Math.sin(lat);		
+            //vertices.push(x, y, z);
+	    //normales.push(x, y, z);
 
-            vertices.push(x, y, z);
-			normales.push(x, y, z);
-			var rgb = toRgb(360*(0.5*x+0.5), 0.5, 0.5);
-			colores.push(rgb.red, rgb.green, rgb.blue );			
-			//colores.push(Math.random(), Math.random(), Math.random());
+	    x = Math.sin(lat)*Math.cos(lon);
+            y = Math.sin(lat)*Math.sin(lon);
+            z = Math.cos(lat);
+
+            vertices.push(-x, z, y);
+	    normales.push(-x, z, y);
+
+		
+	var rgb = toRgb(360*(0.5*x+0.5), 0.5, 0.5);
+	colores.push(rgb.red, rgb.green, rgb.blue );			
+	//colores.push(Math.random(), Math.random(), Math.random());
     }
     vertices.push(0.0, 0.0, -1.0);
 	normales.push(0.0, 0.0, -1.0);
