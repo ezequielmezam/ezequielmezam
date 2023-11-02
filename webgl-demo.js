@@ -452,7 +452,9 @@ void main(){
 		  uniformMaterialShini: gl.getUniformLocation(shaderProgram, 'material.shininess'),
 		  uniformUsarAtributoColor: gl.getUniformLocation(shaderProgram, 'UsarAtributoColor'),
 		  uniformAlphaChannel: gl.getUniformLocation(shaderProgram, 'AlfaUL'),
-		  uniformCuerPosition: gl.getUniformLocation(shaderProgram, 'cuerPos')
+		  uniformCuerPosition: gl.getUniformLocation(shaderProgram, 'cuerPos'),
+		  uniformImageLocation1: gl.getUniformLocation(shaderProgram,'texture1'),
+		  uniformImageLocation2: gl.getUniformLocation(shaderProgram,'texture2')
 		  
 		  
 		}
@@ -837,6 +839,9 @@ function initBuffers(gl, programInfo) {
   gl.uniform3fv( programInfo.uniformLocations.uniformPosition, eye );
   gl.uniform3fv( programInfo.uniformLocations.uniformLightPos, luzpos );
 
+  gl.uniform1i(programInfo.uniformLocations.uniformImageLocation1, 0);  // texture unit 0
+  gl.uniform1i(programInfo.uniformLocations.uniformImageLocation2, 1);  // texture unit 1
+
 }
 
 function toRgb(hue, saturation, value){
@@ -870,6 +875,12 @@ function drawScene(gl, programInfo, vao, deltaTime, currentTime) {
   
   
   gl.bindVertexArray(vao);
+
+  // Tell WebGL we want to affect texture unit 0
+  gl.activeTexture(gl.TEXTURE0);
+
+  // Bind the texture to texture unit 0
+  gl.bindTexture(gl.TEXTURE_2D, textura);
   
 
   const type = gl.UNSIGNED_SHORT;
