@@ -641,8 +641,10 @@ function CrearEsferaVAO(gl, programInfo){
     for ( let paral = 1; paral <= num_lat; paral++)
         for ( let merid = 0; merid < num_lon; merid++){
 
-            lat = 0.5*Math.PI - (Math.PI*paral)/(num_lat+1);
+            //lat = 0.5*Math.PI - (Math.PI*paral)/(num_lat+1);
             lon = (2.0*Math.PI*merid)/num_lon;
+
+	    lat = Math.PI - Math.PI*_lat/(num_lat+1);
 
 
             //x = Math.cos(lon)*Math.cos(lat);
