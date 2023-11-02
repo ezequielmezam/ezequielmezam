@@ -498,12 +498,13 @@ function CrearEsferaVAO(gl, programInfo){
     var vertices = new Array();	//	3*num_puntos
     var normales = new Array();	//	3*num_puntos
     var  colores = new Array();	//	3*num_puntos
+    var texturas = new Array();	//	3*num_puntos
     var  indices = new Array();	//	2*3*(num_lon)*(num_lat) //en webgl existe un límite de 65k para los valores de los indices no así para la cantidad de indices 
 
 
 
     vertices.push(0.0, 0.0, 1.0);
-	normales.push(0.0, 0.0, 1.0);
+    normales.push(0.0, 0.0, 1.0);
 	colores.push(Math.random(), Math.random(), Math.random());
 
     for ( let paral = 1; paral <= num_lat; paral++)
@@ -526,6 +527,13 @@ function CrearEsferaVAO(gl, programInfo){
     vertices.push(0.0, 0.0, -1.0);
 	normales.push(0.0, 0.0, -1.0);
 	colores.push(Math.random(), Math.random(), Math.random());
+
+	texturas.push( 0.5, 0.0);
+	for( let j = 0 ; j < num_lat ; j++)
+	        for( let i = 0 ; i < num_lon ; i++){
+            		texturas.push( i/num_lon, (j+1)/num_lat );
+           		}
+	texturas.push( 0.5, 1.0);
 
 
     //INDICES:
@@ -594,9 +602,10 @@ function CrearEsferaVAO(gl, programInfo){
     indices.push(num_puntos - 1);
 	
 	
-	var _vertices = new Float32Array(3*num_puntos);	//	3*num_puntos
+    var _vertices = new Float32Array(3*num_puntos);	//	3*num_puntos
     var _normales = new Float32Array(3*num_puntos);	//	3*num_puntos
     var  _colores = new Float32Array(3*num_puntos);	//	3*num_puntos
+    var _texturas = new Float32Array(2*num_puntos);
     var  _indices = new Uint16Array(2*3*(num_lon)*(num_lat));	//	2*3*(num_lon)*(num_lat)
 	
 	for(let i = 0 ; i < vertices.length; i++){
@@ -604,6 +613,9 @@ function CrearEsferaVAO(gl, programInfo){
 		_normales[i] = normales[i];
 		_colores[i]  = colores[i];
 		
+		}
+	for(let i = 0 ; i < texturas.length; i++){
+	    _texturas[i] = texturas[i];		
 		}
 	for(let i = 0 ; i < indices.length; i++){
 		_indices[i] = indices[i];
@@ -614,7 +626,7 @@ function CrearEsferaVAO(gl, programInfo){
 	return vao;
 };
 
-function CrearVAO(gl, programInfo, vertices, normales, colores, indices ){
+function CrearVAO(gl, programInfo, vertices, normales, colores, texturas, indices ){
 	
   var vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -645,7 +657,11 @@ function CrearVAO(gl, programInfo, vertices, normales, colores, indices ){
   gl.enableVertexAttribArray( programInfo.attribLocations.vertexNormal);
   gl.vertexAttribPointer( programInfo.attribLocations.vertexNormal, numComponents, type, normalize, stride, offset);
   
-
+  const textureBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, textureBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texturas), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray( programInfo.attribLocations.vertexTexture);
+  gl.vertexAttribPointer( programInfo.attribLocations.vertexTexture, 2, type, normalize, stride, offset);
 
   const indexBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
