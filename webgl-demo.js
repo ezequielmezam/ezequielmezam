@@ -1275,3 +1275,7 @@ function loadTexture(gl, url) {
 
   return texture;
 }
+
+function isPowerOf2(value) {
+  return (value & (value - 1)) === 0;
+}
