@@ -398,7 +398,10 @@ void main(){
 
 
         ambient  = luz.ambient * varColorVertice;
-		 diffuse  = luz.diffuse * diff * varColorVertice;
+	diffuse  = luz.diffuse * diff * varColorVertice;
+
+        ambient  = luz.ambient * texture(texture1, TexCoord).rgb;
+        diffuse  = luz.diffuse *  diff * texture(texture1, TexCoord).rgb ;
 
 
 
