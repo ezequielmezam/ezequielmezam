@@ -37,6 +37,8 @@ const h = 0.01;
 const a = [ h/2.0, h/2.0, h,   0.0   ];
 const b = [ h/6.0, h/3.0, h/3.0, h/6.0 ];
 
+let textura;
+var cuboVAO;
 
 main();
 
@@ -467,6 +469,13 @@ void main(){
 	  initBuffers(gl, programInfo);
 	  const vao = CrearEsferaVAO(gl, programInfo);
 
+	  cuboVAO = CrearCuboVAO(gl, programInfo);
+
+	  // Load texture
+	  textura = loadTexture(gl, "tierra.jpg");
+	  // Flip image pixels into the bottom-to-top order that WebGL expects.
+	  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
 	  var then = 0;
 
 	  function render(now)
@@ -483,6 +492,123 @@ void main(){
 	  requestAnimationFrame(render);
 }//fin de la declaración de la función main()
 
+function CrearCuboVAO(gl, programInfo){
+	
+	
+	const positions = [
+    // Front face
+    -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
+
+    // Back face
+    -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0,
+
+    // Top face
+    -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0,
+
+    // Bottom face
+    -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0,
+
+    // Right face
+    1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0,
+
+    // Left face
+    -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0,
+	];
+	
+	const _normales = [
+	// Front face:
+	0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
+	// Back face:
+	0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0,
+	// Top face:
+	0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0,
+	// Bottom face:
+	0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0,
+	// Right face:
+	1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+	// Left face:
+	-1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0
+	];
+  
+  
+  const faceColors = [
+    [1.0, 1.0, 1.0, 1.0], // Front face: white
+    [1.0, 0.0, 0.0, 1.0], // Back face: red
+    [0.0, 1.0, 0.0, 1.0], // Top face: green
+    [0.0, 0.0, 1.0, 1.0], // Bottom face: blue
+    [1.0, 1.0, 0.0, 1.0], // Right face: yellow
+    [1.0, 0.0, 1.0, 1.0], // Left face: purple
+  ];
+
+  // Convert the array of colors into a table for all the vertices.
+
+  var colors = [];
+
+  for (var j = 0; j < faceColors.length; ++j) {
+    const c = faceColors[j];
+    // Repeat each color four times for the four vertices of the face
+    colors = colors.concat(c, c, c, c);
+  }
+  
+  
+    const textureCoordinates = [
+    // Front
+    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+    // Back
+    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+    // Top
+    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+    // Bottom
+    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+    // Right
+    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+    // Left
+    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+  ];
+  
+  
+  const indices = [
+    0,
+    1,
+    2,
+    0,
+    2,
+    3, // front
+    4,
+    5,
+    6,
+    4,
+    6,
+    7, // back
+    8,
+    9,
+    10,
+    8,
+    10,
+    11, // top
+    12,
+    13,
+    14,
+    12,
+    14,
+    15, // bottom
+    16,
+    17,
+    18,
+    16,
+    18,
+    19, // right
+    20,
+    21,
+    22,
+    20,
+    22,
+    23, // left
+  ];	
+	const _vao = CrearVAO(gl, programInfo, positions, _normales, colors, textureCoordinates, indices);
+	return _vao;
+	
+}
 function CrearEsferaVAO(gl, programInfo){
 
 	//El límite máximo para el valor de un índice es 2^16 = 65k, por lo tanto no pueden hacerse una drawcall con una lista de índices que supere este valores,
