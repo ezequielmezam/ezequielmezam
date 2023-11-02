@@ -748,7 +748,7 @@ function CrearEsferaVAO(gl, programInfo){
 		
 		}
 	
-	const vao = CrearVAO(gl, programInfo, _vertices, _normales, _colores, _indices);
+	const vao = CrearVAO(gl, programInfo, _vertices, _normales, _colores, _texturas, _indices);
 	return vao;
 };
 
