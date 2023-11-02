@@ -638,11 +638,11 @@ function CrearEsferaVAO(gl, programInfo){
     normales.push(0.0, 0.0, 1.0);
 	colores.push(Math.random(), Math.random(), Math.random());
 
-    for ( let paral = 1; paral <= num_lat; paral++)
-        for ( let merid = 0; merid < num_lon; merid++){
+    for ( let _lat = 1; _lat <= num_lat; _lat++)
+        for ( let _lon = 0; _lon < num_lon; _lon++){
 
             //lat = 0.5*Math.PI - (Math.PI*paral)/(num_lat+1);
-            lon = (2.0*Math.PI*merid)/num_lon;
+            lon = (2.0*Math.PI*_lon)/num_lon;
 
 	    lat = Math.PI - Math.PI*_lat/(num_lat+1);
 
