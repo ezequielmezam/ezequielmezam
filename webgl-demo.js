@@ -619,7 +619,7 @@ function CrearEsferaVAO(gl, programInfo){
 	//El límite máximo para el valor de un índice es 2^16 = 65k, por lo tanto no pueden hacerse una drawcall con una lista de índices que supere este valores,
     //Por tanto la cantidad de puntos diferentes que usa la maya no puede ser mayor a 65k y si es una maya cuadrada serían 256x256 como máximo o 362x181 para mantener un lado el doble que el alto
 
-    var num_lon = 362, num_lat = 181, num_puntos;
+    var num_lon = 1362, num_lat = 1181, num_puntos;
 	var lat, lon, x, y, z;
 
     num_puntos = num_lat*num_lon + 2;//sumar 2 por los polos
@@ -747,7 +747,7 @@ function CrearEsferaVAO(gl, programInfo){
     var _normales = new Float32Array(3*num_puntos);	//	3*num_puntos
     var  _colores = new Float32Array(3*num_puntos);	//	3*num_puntos
     var _texturas = new Float32Array(2*num_puntos);
-    var  _indices = new Uint16Array(2*3*(num_lon)*(num_lat));	//	2*3*(num_lon)*(num_lat)
+    var  _indices = new Uint32Array(2*3*(num_lon)*(num_lat));	//	2*3*(num_lon)*(num_lat)
 	
 	for(let i = 0 ; i < vertices.length; i++){
 		_vertices[i] = vertices[i];
@@ -806,7 +806,7 @@ function CrearVAO(gl, programInfo, vertices, normales, colores, texturas, indice
 
   const indexBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
 	  
 
   gl.bindVertexArray(null);
@@ -896,7 +896,7 @@ function drawScene(gl, programInfo, vao, deltaTime, currentTime) {
   gl.bindTexture(gl.TEXTURE_2D, textura);
   
 
-  const type = gl.UNSIGNED_SHORT;
+  const type = gl.UNSIGNED_INT;//_SHORT
   const offset = 0;
 
 
