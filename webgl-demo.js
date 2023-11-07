@@ -619,8 +619,8 @@ function CrearEsferaVAO(gl, programInfo){
 	//El límite máximo para el valor de un índice es 2^16 = 65k, por lo tanto no pueden hacerse una drawcall con una lista de índices que supere este valores,
     //Por tanto la cantidad de puntos diferentes que usa la maya no puede ser mayor a 65k y si es una maya cuadrada serían 256x256 como máximo o 362x181 para mantener un lado el doble que el alto
 
-    var num_lon = 1362, num_lat = 1181, num_puntos;
-	var lat, lon, x, y, z;
+    var num_lon = 400, num_lat = 200, num_puntos;//num_lon = 362, num_lat = 181
+    var lat, lon, x, y, z;
 
     num_puntos = num_lat*num_lon + 2;//sumar 2 por los polos
     cant_puntos_esfera = 2*3*num_lon*num_lat;
