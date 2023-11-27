@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load, Process, and Save CSV Files Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+
+        #output {
+            text-align: left;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #output p {
+            margin: 0;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            margin: 10px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSV File Processor</h1>
+
+    <label for="fileInputA" class="file-input-label">Select File A</label>
+    <input type="file" id="fileInputA" accept=".txt, .csv" style="display:none;">
+
+    <label for="fileInputB" class="file-input-label">Select File B</label>
+    <input type="file" id="fileInputB" accept=".txt, .csv" style="display:none;">
+
+    <button onclick="loadFiles()">Load Files</button>
+    <button onclick="processFiles()">Process</button>
+    <button onclick="saveResult()">Save Result</button>
+    <div id="output"></div>
+
+    <!-- Script tag for the worker code -->
+    <script id="workerCode">
+        self.onmessage = function(event) {
+            const linesA = event.data.linesA;
+            const linesB = event.data.linesB;
+
+            // Create arrays of objects
+            const objectsA = linesA.map(line => {
+                const [sitio, latitud, longitud] = line.split(',');
+                return { sitio, latitud: parseFloat(latitud), longitud: parseFloat(longitud) };
+            });
+
+            const objectsB = linesB.map(line => {
+                const [sitio, latitud, longitud] = line.split(',');
+                return { sitio, latitud: parseFloat(latitud), longitud: parseFloat(longitud) };
+            });
+
+            // Create an array of objects resultante
+            const objectsResultante = objectsA.map(objA => {
+                const closestObjectB = findClosestObjectB(objA, objectsB);
+                const distancia = calculateDistance(objA, closestObjectB);
+                return { id: objA.sitio, cercano: closestObjectB.sitio, distancia };
+            });
+
+            // Create an array of lines for objectsResultante
+            const linesResultante = objectsResultante.map(objResultante => {
+                return `${objResultante.id}, ${objResultante.cercano}, ${objResultante.distancia}`;
+            });
+
+            // Concatenate the two arrays of lines
+            const mergedLines = [...linesA, ...linesB, ...linesResultante];
+
+            // Send only the concatenated array of lines back to the main thread
+            self.postMessage(linesResultante);
+        };
+
+        function findClosestObjectB(objA, objectsB) {
+            let closestObjectB = objectsB[0];
+            let minDistance = calculateDistance(objA, closestObjectB);
+
+            for (let i = 1; i < objectsB.length; i++) {
+                const distance = calculateDistance(objA, objectsB[i]);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestObjectB = objectsB[i];
+                }
+            }
+
+            return closestObjectB;
+        }
+
+        function calculateDistance(objA, objB) {
+            const latDiff = objA.latitud - objB.latitud;
+            const lonDiff = objA.longitud - objB.longitud;
+            return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
+        }
+    </script>
+
+    <script>
+        let linesA = [];
+        let linesB = [];
+        let processedLines = [];
+
+        function loadFiles() {
+            const inputA = document.getElementById('fileInputA');
+            const inputB = document.getElementById('fileInputB');
+
+            const fileA = inputA.files[0];
+            const fileB = inputB.files[0];
+
+            if (fileA && fileB) {
+                const readerA = new FileReader();
+                const readerB = new FileReader();
+
+                readerA.onload = function (eA) {
+                    const contentA = eA.target.result;
+                    linesA = contentA.split('\n');
+                };
+
+                readerB.onload = function (eB) {
+                    const contentB = eB.target.result;
+                    linesB = contentB.split('\n');
+                };
+
+                readerA.readAsText(fileA);
+                readerB.readAsText(fileB);
+
+                // Display selected file names
+                document.getElementById('output').innerHTML = `<p>Selected Files: ${fileA.name}, ${fileB.name}</p>`;
+
+                // Optional: Display loaded file names
+                inputA.previousElementSibling.innerHTML = `Loaded: ${fileA.name}`;
+                inputB.previousElementSibling.innerHTML = `Loaded: ${fileB.name}`;
+            } else {
+                alert('Please select both files.');
+            }
+        }
+
+        function processFiles() {
+            if (linesA.length === 0 || linesB.length === 0) {
+                alert('Please load files before processing.');
+                return;
+            }
+
+            // Create a new worker
+            const workerCode = document.getElementById('workerCode').textContent;
+            const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+            const worker = new Worker(URL.createObjectURL(workerBlob));
+
+            // Pass the arrays of lines to the worker
+            worker.postMessage({ linesA, linesB });
+
+            // Receive the result array of lines from the worker
+            worker.onmessage = function(event) {
+                processedLines = event.data;
+                displayLines(processedLines);
+            };
+        }
+
+        function displayLines(lines) {
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = ''; // Clear previous content
+
+            lines.forEach(line => {
+                const paragraph = document.createElement('p');
+                paragraph.textContent = line;
+                outputDiv.appendChild(paragraph);
+            });
+        }
+
+        function saveResult() {
+            if (processedLines.length === 0) {
+                alert('No processed data to save.');
+                return;
+            }
+
+            const blob = new Blob([processedLines.join('\n')], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'processed_data.csv';
+            document.body.appendChild(a);
+            a.click();
+        }
+    </script>
+</body>
+</html>
