@@ -32,17 +32,17 @@
     </style>
 </head>
 <body>
-    <h1>CSV File Processor</h1>
+    <h1>Distancias entre grupos de puntos</h1>
 
-    <label for="fileInputA" class="file-input-label">Select File A</label>
+    <label for="fileInputA" class="file-input-label">Seleccionar Lista A</label>
     <input type="file" id="fileInputA" accept=".txt, .csv" style="display:none;">
 
-    <label for="fileInputB" class="file-input-label">Select File B</label>
+    <label for="fileInputB" class="file-input-label">Seleccionar Lista B</label>
     <input type="file" id="fileInputB" accept=".txt, .csv" style="display:none;">
 
-    <button onclick="loadFiles()">Load Files</button>
-    <button onclick="processFiles()">Process</button>
-    <button onclick="saveResult()">Save Result</button>
+    <button onclick="loadFiles()">Cargar Archivos</button>
+    <button onclick="processFiles()">Procesar</button>
+    <button onclick="saveResult()">Guardar</button>
     <div id="output"></div>
 
     <!-- Script tag for the worker code -->
