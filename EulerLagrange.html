@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Derivación de la Ecuación de Euler-Lagrange</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        body {
+            font-family: "CMU Serif", serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f8f8f8;
+        }
+        .content {
+            width: 50%;
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        p {
+            text-align: justify;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h2>Derivación de la Ecuación de Euler-Lagrange</h2>
+        
+        <p>Consideremos la acción \( S[q] \) definida como:</p>
+        <p>\[
+        S[q] = \int_{t_1}^{t_2} L(q, \dot{q}, t) \, dt \quad (1)
+        \]</p>
+        <p>La función \( q(t) \) que minimiza la acción \( S[q] \) debe satisfacer la ecuación de Euler-Lagrange. Para derivar esta ecuación, consideramos una variación \( q(t) \rightarrow q(t) + \epsilon \delta q(t) \), donde \( \epsilon \) es un parámetro pequeño y \( \delta q(t) \) es una función arbitraria que representa la variación de \( q(t) \).</p>
+
+        <p>La acción variada es:</p>
+        <p>\[
+        S[q + \epsilon \delta q] = \int_{t_1}^{t_2} L(q + \epsilon \delta q, \dot{q} + \epsilon \delta \dot{q}, t) \, dt \quad (2)
+        \]</p>
+        <p>La variación de la acción es entonces:</p>
+        <p>\[
+        \delta S[q] = \frac{d}{d\epsilon} S[q + \epsilon \delta q] \bigg|_{\epsilon=0} = \frac{d}{d\epsilon} \int_{t_1}^{t_2} L(q + \epsilon \delta q, \dot{q} + \epsilon \delta \dot{q}, t) \, dt \bigg|_{\epsilon=0} \quad (3)
+        \]</p>
+        <p>Dado que la derivada con respecto a \( \epsilon \) se puede intercambiar con la integral, obtenemos:</p>
+        <p>\[
+        \delta S[q] = \int_{t_1}^{t_2} \frac{d}{d\epsilon} L(q + \epsilon \delta q, \dot{q} + \epsilon \delta \dot{q}, t) \bigg|_{\epsilon=0} \, dt \quad (4)
+        \]</p>
+        <p>Para derivar el lagrangiano \( L(q + \epsilon \delta q, \dot{q} + \epsilon \delta \dot{q}, t) \) con respecto a \( \epsilon \), utilizamos la regla de la cadena. Si tenemos una función \( z(u(x), v(x)) \), la derivada parcial de \( z \) respecto a \( x \) es:</p>
+        <p>\[
+        \frac{\partial z}{\partial x} = \frac{\partial z}{\partial u} \frac{\partial u}{\partial x} + \frac{\partial z}{\partial v} \frac{\partial v}{\partial x} \quad (5)
+        \]</p>
+        <p>Aplicando esto a nuestra situación:</p>
+        <p>\[
+        \frac{d}{d\epsilon} L(q + \epsilon \delta q, \dot{q} + \epsilon \delta \dot{q}, t) = \frac{\partial L}{\partial q} \frac{\partial}{\partial \epsilon}(q + \epsilon \delta q) + \frac{\partial L}{\partial \dot{q}} \frac{\partial}{\partial \epsilon}(\dot{q} + \epsilon \delta \dot{q}) \quad (6)
+        \]</p>
+        <p>Ahora, derivamos con respecto a \( \epsilon \) las expresiones \( q + \epsilon \delta q \) y \( \dot{q} + \epsilon \delta \dot{q} \):</p>
+        <p>\[
+        \frac{\partial}{\partial \epsilon}(q + \epsilon \delta q) = \delta q \quad (7a)
+        \]</p>
+        <p>\[
+        \frac{\partial}{\partial \epsilon}(\dot{q} + \epsilon \delta \dot{q}) = \delta \dot{q} \quad (7b)
+        \]</p>
+        <p>Sustituyendo estas derivadas en la expresión (6):</p>
+        <p>\[
+        \frac{d}{d\epsilon} L(q + \epsilon \delta q, \dot{q} + \epsilon \delta \dot{q}, t) = \frac{\partial L}{\partial q} \delta q + \frac{\partial L}{\partial \dot{q}} \delta \dot{q} \quad (8)
+        \]</p>
+        <p>Por lo tanto, la variación \( \delta S[q] \) se convierte en:</p>
+        <p>\[
+        \delta S[q] = \int_{t_1}^{t_2} \left( \frac{\partial L}{\partial q} \delta q + \frac{\partial L}{\partial \dot{q}} \delta \dot{q} \right) \, dt \quad (9)
+        \]</p>
+
+        <p>Si derivamos con respecto a \( t \) aplicando la regla del producto a la expresión \( \frac{\partial L}{\partial \dot{q}} \delta q \), obtenemos:</p>
+        <p>\[
+        \frac{d}{dt} \left( \frac{\partial L}{\partial \dot{q}} \delta q \right) = \frac{\partial L}{\partial \dot{q}} \delta \dot{q} + \frac{d}{dt} \left( \frac{\partial L}{\partial \dot{q}} \right) \delta q \quad (10)
+        \]</p>
+        <p>Por tanto, podemos reescribir el segundo término del paso (9) como:</p>
+        <p>\[
+        \frac{\partial L}{\partial \dot{q}} \delta \dot{q} = \frac{d}{dt} \left( \frac{\partial L}{\partial \dot{q}} \delta q \right) - \frac{d}{dt} \left( \frac{\partial L}{\partial \dot{q}} \right) \delta q \quad (11)
+        \]</p>
+
+        <p>También se puede integrar dicho segundo término mediante la técnica de integración por partes para eliminar la derivada de \( \delta q \) y trasladarla a la función \( \frac{\partial L}{\partial \dot{q}} \).</p>
+
+        <p>La fórmula general de integración por partes es:</p>
+        <p>\[
+        \int u \frac{d}{dt} v \, dt = u v - \int \frac{d}{dt} u \cdot v \, dt \quad (12)
+        \]</p>
+        <p>En nuestro caso:</p>
+        <p>
+            \( u = \frac{\partial L}{\partial \dot{q}} \) <br>
+            \( v = \delta q \)
+        </p>
+        <p>Aplicamos la integración por partes al segundo término en (9):</p>
+        <p>\[
+        \int \frac{\partial L}{\partial \dot{q}} \frac{d}{dt}(\delta q) \, dt = \left[ \frac{\partial L}{\partial \dot{q}} \delta q \right]_{t_1}^{t_2} - \int_{t_1}^{t_2} \frac{d}{dt}\left(\frac{\partial L}{\partial \dot{q}}\right) \delta q \, dt \quad (13)
+        \]</p>
+        <p>Sustituyendo (13) en (9), obtenemos:</p>
+        <p>\[
+        \delta S[q] = \left[ \frac{\partial L}{\partial \dot{q}} \delta q \right]_{t_1}^{t_2} + \int_{t_1}^{t_2} \left( \frac{\partial L}{\partial q} - \frac{d}{dt}\left(\frac{\partial L}{\partial \dot{q}}\right) \right) \delta q \, dt \quad (14)
+        \]</p>
+        <p>Para que la acción sea estacionaria, \( \delta S[q] \) debe ser cero para cualquier \( \delta q(t) \). El primer término en (14) desaparece porque suponemos que las variaciones \( \delta q(t) \) son cero en los puntos finales \( t_1 \) y \( t_2 \). Por lo tanto, para que \( \delta S[q] = 0 \) para cualquier \( \delta q(t) \), el integrando debe ser cero:</p>
+        <p>\[
+        \frac{\partial L}{\partial q} - \frac{d}{dt}\left(\frac{\partial L}{\partial \dot{q}}\right) = 0 \quad (15)
+        \]</p>
+        <p>Esta es la ecuación de Euler-Lagrange, que debe satisfacerse para que la acción \( S[q] \) sea estacionaria.</p>
+    </div>
+</body>
+</html>
