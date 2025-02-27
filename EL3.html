@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demostración de la Ecuación de Euler-Lagrange</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body);"></script>
+    <style>
+        body {
+            font-family: 'CMU Serif', serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f9f9f9;
+        }
+        .content {
+            width: 60%;
+            max-width: 800px;
+            text-align: justify;
+            line-height: 1.6;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        p {
+            color: #555;
+        }
+        ::selection {
+            background-color: black;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Demostración de la Ecuación de Euler-Lagrange</h1>
+        <p>
+            La ecuación de Euler-Lagrange es una herramienta fundamental en el cálculo de variaciones. Se utiliza para encontrar la función que extremiza (maximiza o minimiza) un funcional, que es una función de funciones. A continuación, se presenta una demostración detallada de esta ecuación.
+        </p>
+
+        <h2>Introducción al problema</h2>
+        <p>
+            Consideremos un funcional \( F[q] \) definido como:
+            \[
+            F[q] = \int_{a}^{b} L(t, q(t), q'(t)) \, dt,
+            \]
+            donde \( L(t, q, q') \) es el <strong>lagrangiano</strong>, que depende de la variable independiente \( t \), la función \( q(t) \) y su derivada \( q'(t) \). Nuestro objetivo es encontrar la función \( q(t) \) que hace que \( F[q] \) sea extremo.
+        </p>
+
+        <h2>Variación de la función</h2>
+        <p>
+            Para encontrar la función que extremiza el funcional, introducimos una pequeña variación \( \eta(t) \) tal que \( \eta(a) = \eta(b) = 0 \). Definimos una familia de funciones perturbadas:
+            \[
+            q(t, \epsilon) = q(t) + \epsilon \eta(t),
+            \]
+            donde \( \epsilon \) es un parámetro pequeño. La derivada de \( q(t, \epsilon) \) con respecto a \( t \) es:
+            \[
+            q'(t, \epsilon) = q'(t) + \epsilon \eta'(t).
+            \]
+            Esta perturbación nos permite explorar cómo cambia el funcional cuando \( q(t) \) se modifica ligeramente.
+        </p>
+
+        <h2>Variación del funcional</h2>
+        <p>
+            El funcional perturbado se define como:
+            \[
+            F[q + \epsilon \eta] = \int_{a}^{b} L(t, q(t, \epsilon), q'(t, \epsilon)) \, dt.
+            \]
+            Para encontrar el extremo, requerimos que la derivada de \( F \) con respecto a \( \epsilon \) sea cero cuando \( \epsilon = 0 \):
+            \[
+            \frac{dF}{d\epsilon}\bigg|_{\epsilon=0} = 0.
+            \]
+            Esta condición asegura que el funcional no cambie en primer orden para pequeñas variaciones de \( q(t) \).
+        </p>
+
+        <h2>Derivada del funcional</h2>
+        <p>
+            Usamos la regla de la cadena para derivar \( F \) con respecto a \( \epsilon \):
+            \[
+            \frac{dF}{d\epsilon} = \int_{a}^{b} \left( \frac{\partial L}{\partial q} \frac{\partial q}{\partial \epsilon} + \frac{\partial L}{\partial q'} \frac{\partial q'}{\partial \epsilon} \right) dt.
+            \]
+            Sustituyendo \( q(t, \epsilon) = q(t) + \epsilon \eta(t) \) y \( q'(t, \epsilon) = q'(t) + \epsilon \eta'(t) \), obtenemos:
+            \[
+            \frac{\partial q}{\partial \epsilon} = \eta(t), \quad \frac{\partial q'}{\partial \epsilon} = \eta'(t).
+            \]
+            Por lo tanto, la derivada del funcional se convierte en:
+            \[
+            \frac{dF}{d\epsilon} = \int_{a}^{b} \left( \frac{\partial L}{\partial q} \eta(t) + \frac{\partial L}{\partial q'} \eta'(t) \right) dt.
+            \]
+        </p>
+
+        <h2>Integración por partes</h2>
+        <p>
+            Aplicamos integración por partes al segundo término de la integral:
+            \[
+            \int_{a}^{b} \frac{\partial L}{\partial q'} \eta'(t) \, dt = \left[ \frac{\partial L}{\partial q'} \eta(t) \right]_{a}^{b} - \int_{a}^{b} \frac{d}{dt} \left( \frac{\partial L}{\partial q'} \right) \eta(t) \, dt.
+            \]
+            Dado que \( \eta(a) = \eta(b) = 0 \), el término evaluado en los límites se anula, y obtenemos:
+            \[
+            \int_{a}^{b} \frac{\partial L}{\partial q'} \eta'(t) \, dt = - \int_{a}^{b} \frac{d}{dt} \left( \frac{\partial L}{\partial q'} \right) \eta(t) \, dt.
+            \]
+        </p>
+
+        <h2>Ecuación de Euler-Lagrange</h2>
+        <p>
+            Sustituyendo este resultado en la expresión para \( \frac{dF}{d\epsilon} \), obtenemos:
+            \[
+            \frac{dF}{d\epsilon} = \int_{a}^{b} \left( \frac{\partial L}{\partial q} - \frac{d}{dt} \left( \frac{\partial L}{\partial q'} \right) \right) \eta(t) \, dt.
+            \]
+            Para que \( \frac{dF}{d\epsilon} = 0 \) para cualquier \( \eta(t) \), el integrando debe ser cero:
+            \[
+            \boxed{ \frac{\partial L}{\partial q} - \frac{d}{dt} \left( \frac{\partial L}{\partial q'} \right) = 0 }.
+            \]
+            Esta es la <strong>ecuación de Euler-Lagrange</strong>, que debe satisfacer la función \( q(t) \) que extremiza el funcional \( F[q] \).
+        </p>
+    </div>
+</body>
+</html>
