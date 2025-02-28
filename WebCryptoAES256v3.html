@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Encriptar con AES-256 (Base64 y HEX)</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; }
+        textarea, input { width: 100%; margin-bottom: 10px; padding: 5px; }
+        button { padding: 10px 20px; margin-right: 10px; cursor: pointer; }
+        #output { margin-top: 20px; word-wrap: break-word; }
+        label { margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Encriptar y Desencriptar</h2>
+    <label><input type="checkbox" id="isHex" checked> Texto encriptado está en HEX (desmarcar para Base64)</label><br>
+    <label for="texto">Texto:</label><br>
+    <textarea id="texto" rows="3" placeholder="Escribe tu texto"></textarea><br>
+    <label for="password">Password:</label><br>
+    <input type="text" id="password" placeholder="Escribe tu password"><br>
+    <button onclick="encryptText()">Encriptar</button>
+    <button onclick="decryptText()">Desencriptar</button>
+    <h3>Resultado:</h3>
+    <div id="output"></div>
+
+    <script>
+        async function deriveKey(password, salt) {
+            const encoder = new TextEncoder();
+            const importedKey = await crypto.subtle.importKey(
+                "raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]
+            );
+            return await crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+                importedKey,
+                { name: "AES-CBC", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        function arrayBufferToBase64(buffer) {
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+        }
+
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        function base64ToArrayBuffer(base64) {
+            return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        }
+
+        function hexToArrayBuffer(hex) {
+            const bytes = [];
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes.push(parseInt(hex.substr(i, 2), 16));
+            }
+            return new Uint8Array(bytes);
+        }
+
+        async function encryptText() {
+            const texto = document.getElementById("texto").value;
+            const password = document.getElementById("password").value;
+            if (!texto || !password) {
+                document.getElementById("output").innerText = "Falta texto o password.";
+                return;
+            }
+
+            const encoder = new TextEncoder();
+            const data = encoder.encode(texto);
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(16));
+            const key = await deriveKey(password, salt);
+            const encrypted = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, key, data);
+            const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
+            combined.set(salt, 0);
+            combined.set(iv, salt.length);
+            combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+
+            const base64Result = arrayBufferToBase64(combined);
+            const hexResult = arrayBufferToHex(combined);
+            document.getElementById("output").innerText = 
+                `Encriptado (Base64): ${base64Result}\nEncriptado (HEX): ${hexResult}`;
+        }
+
+        async function decryptText() {
+            const textoEncriptado = document.getElementById("texto").value.trim();
+            const password = document.getElementById("password").value;
+            const isHex = document.getElementById("isHex").checked;
+            if (!textoEncriptado || !password) {
+                document.getElementById("output").innerText = "Falta texto o password.";
+                return;
+            }
+
+            try {
+                const combined = isHex ? hexToArrayBuffer(textoEncriptado) : base64ToArrayBuffer(textoEncriptado);
+                const salt = combined.slice(0, 16);
+                const iv = combined.slice(16, 32);
+                const encryptedData = combined.slice(32);
+                const key = await deriveKey(password, salt);
+                const decrypted = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, key, encryptedData);
+                const decoder = new TextDecoder();
+                document.getElementById("output").innerText = `Desencriptado: ${decoder.decode(decrypted)}`;
+            } catch (e) {
+                document.getElementById("output").innerText = `Error: ${e.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
