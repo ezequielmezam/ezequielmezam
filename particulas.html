@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="example.css">
+</head>
+<!--
+  The MIT License (MIT)
+
+  Copyright (c) 2020 Tarek Sherif
+
+ 
+-->
+<body>
+<div id="wrapper">
+	<canvas id="webgpu-canvas"></canvas>
+</div>
+ <!--
+<div id="stats">
+    <div id="device-info"></div>
+    <div>
+        CPU Frame Time: <span id="cpu-time"></span>
+    </div>
+    <div>
+        GPU Compute Time: <span id="compute-time"></span>
+    </div>
+    <div>
+        GPU Draw Time: <span id="draw-time"></span>
+    </div>
+</div>
+-->
+<script type="module">
+import { checkSupport, addDescription, parseAdapterInfo } from "./utils.js";
+import { Timer } from "./Timer.js";
+
+//import { vec2, vec3, mat4,} from 'https://wgpu-matrix.org/dist/3.x/wgpu-matrix.module.js';
+import { vec2, vec3, mat4,} from './wgpu-matrix.module.js';
+
+
+const WORKGROUP_SIZE = 64;//64
+const NUM_WORKGROUPS = 1000;
+const NUM_PARTICLES = WORKGROUP_SIZE * NUM_WORKGROUPS;
+const PARTICLE_SIZE = 16;
+
+checkSupport();
+/*
+addDescription(
+    "Particles",
+    `Using a compute shader to simulate gravity on ${NUM_PARTICLES} instanced quad particles.`,
+    "particles.html"
+);
+*/
+
+(async () => {
+    //////////////////////////////////////////
+    // Set up WebGPU adapter
+    //////////////////////////////////////////
+
+    const adapter = await navigator.gpu.requestAdapter();
+    const presentationFormat = navigator.gpu.getPreferredCanvasFormat(adapter);
+
+    ////////////////////////////////////
+    // Set up device and canvas context
+    ////////////////////////////////////
+
+    const [adapterInfo, device] = await Promise.all([
+        adapter.info,//adapter.requestAdapterInfo(),<--deprecated sept 2024
+        adapter.requestDevice({
+            requiredFeatures: adapter.features.has("timestamp-query") ? ["timestamp-query"] : []
+        })
+    ]);
+
+    const canvas = document.getElementById("webgpu-canvas");
+    canvas.width = window.innerWidth;//innerWidth
+    canvas.height = window.innerHeight;
+    const context = canvas.getContext("webgpu");
+    
+    context.configure({
+        device,
+        format: presentationFormat
+    });
+
+    //actualizar stats div 
+	//document.getElementById("device-info").innerText = parseAdapterInfo(adapterInfo);
+
+    const timer = new Timer(device);
+
+    const cpuTimeDisplay = document.getElementById("cpu-time");
+    const computeTimeDisplay = document.getElementById("compute-time");
+    const drawTimeDisplay = document.getElementById("draw-time");
+
+    ////////////////////////////////////////////////////////
+    // Create buffers for compute pass
+    // (positionBuffer also used in render pass)
+    ////////////////////////////////////////////////////////
+
+    const positionBuffer = device.createBuffer({
+        size: 16 * NUM_PARTICLES,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+    });
+    const positionBufferData = new Float32Array(NUM_PARTICLES * 4);
+    for (let i = 0; i < positionBufferData.length; i += 4) {
+	
+		let x = Math.random() * 2 - 1;
+		let y = Math.random() * 2 - 1;
+		let z = Math.random() * 2 - 1;
+		
+		//puntos sobre la superficie de una esfera radio 0.25
+		let radio = Math.sqrt(x*x + y*y + z*z);		
+		let escala = 1.0;//0.25;
+		positionBufferData[i]     = escala*x/radio+0.0;
+        positionBufferData[i + 1] = escala*y/radio+1.0;//agrego 1 para mover el eje z del sistem aizawa y que no se produzca linea vertical
+        positionBufferData[i + 2] = escala*z/radio+0.0;//mover z hacia el eje positivo para evitar artifact de linea final
+		
+		//Usado en Yu Wang, step 0.002
+		//positionBufferData[i]     = 2.2;
+        //positionBufferData[i + 1] = 2.2;
+        //positionBufferData[i + 2] = 28.0;
+		
+        //puntos en un cubo de 1x1x1
+		//positionBufferData[i]     = Math.random() * 2 - 1;
+        //positionBufferData[i + 1] = Math.random() * 2 - 1;
+        //positionBufferData[i + 2] = Math.random() * 2 - 1;
+        
+		positionBufferData[i + 3] = 1;
+    }
+    device.queue.writeBuffer(positionBuffer, 0, positionBufferData);
+	
+	const timeBuffer = device.createBuffer({
+        size: 4,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+    });
+	const initTime = 0.0;
+    const timeBufferData = new Float32Array([initTime]);
+    device.queue.writeBuffer(timeBuffer, 0, timeBufferData.buffer);
+
+
+    ///////////////////////////////////
+    // Create compute shader module
+    //////////////////////////////////
+	
+	const computecode = `
+            struct Mass {
+                position1: vec4<f32>,
+                position2: vec4<f32>,
+                position3: vec4<f32>,
+                factor1: f32,
+                factor2: f32,
+                factor3: f32
+            };
+			
+			// Struct for returning noise and its analytic gradient
+			struct NG3 {
+				noise: f32,
+				gradient: vec3<f32>
+			};
+
+			fn mod289v4f(i: vec4<f32>) -> vec4<f32> {
+				return i - floor(i / 289.0) * 289.0;
+			}
+
+			fn permute289v4f(i: vec4<f32>) -> vec4<f32>
+			{
+				var im: vec4<f32> = mod289v4f(i);
+				return mod289v4f((im*34.0 + 10.0)*im);
+			}
+			
+			// Version computing their gradient and returning a struct
+			fn psrdnoise3(x: vec3<f32>, p: vec3<f32>, alpha: f32) -> NG3
+			{
+				let M = mat3x3<f32>(0.0, 1.0, 1.0, 1.0, 0.0, 1.0,  1.0, 1.0, 0.0);
+				let Mi = mat3x3<f32>(-0.5, 0.5, 0.5, 0.5,-0.5, 0.5, 0.5, 0.5,-0.5);
+
+				var uvw: vec3<f32>;
+				var i0: vec3<f32>;
+				var i1: vec3<f32>;
+				var i2: vec3<f32>;
+				var i3: vec3<f32>;
+				var f0: vec3<f32>;
+				var gt_: vec3<f32>;
+				var lt_: vec3<f32>;
+				var gt: vec3<f32>;
+				var lt: vec3<f32>;
+				var o1: vec3<f32>;
+				var o2: vec3<f32>;
+				var v0: vec3<f32>;
+				var v1: vec3<f32>;
+				var v2: vec3<f32>;
+				var v3: vec3<f32>;
+				var x0: vec3<f32>;
+				var x1: vec3<f32>;
+				var x2: vec3<f32>;
+				var x3: vec3<f32>;
+				
+				uvw = M * x;
+				i0 = floor(uvw);
+				f0 = uvw - i0;
+				gt_ = step(f0.xyx, f0.yzz);
+				lt_ = 1.0 - gt_;
+				gt = vec3<f32>(lt_.z, gt_.xy);
+				lt = vec3<f32>(lt_.xy, gt_.z);
+				o1 = min( gt, lt );
+				o2 = max( gt, lt );
+				i1 = i0 + o1;
+				i2 = i0 + o2;
+				i3 = i0 + vec3<f32>(1.0,1.0,1.0);
+				v0 = Mi * i0;
+				v1 = Mi * i1;
+				v2 = Mi * i2;
+				v3 = Mi * i3;
+				x0 = x - v0;
+				x1 = x - v1;
+				x2 = x - v2;
+				x3 = x - v3;
+				
+				var vx: vec4<f32>;
+				var vy: vec4<f32>;
+				var vz: vec4<f32>;
+
+				if(any(p > vec3<f32>(0.0))) {
+					vx = vec4<f32>(v0.x, v1.x, v2.x, v3.x);
+					vy = vec4<f32>(v0.y, v1.y, v2.y, v3.y);
+					vz = vec4<f32>(v0.z, v1.z, v2.z, v3.z);
+					if(p.x > 0.0) {
+						vx = vx - floor(vx / p.x) * p.x;
+					}
+					if(p.y > 0.0) {
+						vy = vy - floor(vy / p.y) * p.y;
+					}
+					if(p.z > 0.0) {
+						vz = vz - floor(vz / p.z) * p.z;
+					}
+					i0 = floor(M * vec3<f32>(vx.x, vy.x, vz.x) + 0.5);
+					i1 = floor(M * vec3<f32>(vx.y, vy.y, vz.y) + 0.5);
+					i2 = floor(M * vec3<f32>(vx.z, vy.z, vz.z) + 0.5);
+					i3 = floor(M * vec3<f32>(vx.w, vy.w, vz.w) + 0.5);
+				}
+				
+				var hash: vec4<f32>;
+				var theta: vec4<f32>;
+				var sz: vec4<f32>;
+				var psi: vec4<f32>;
+				var St: vec4<f32>;
+				var Ct: vec4<f32>;
+				var sz_: vec4<f32>;
+
+				hash = permute289v4f( permute289v4f( permute289v4f( 
+					vec4<f32>(i0.z, i1.z, i2.z, i3.z ))
+					+ vec4<f32>(i0.y, i1.y, i2.y, i3.y ))
+					+ vec4<f32>(i0.x, i1.x, i2.x, i3.x ));
+				theta = hash * 3.883222077;
+				sz = hash * -0.006920415 + 0.996539792;
+				psi = hash * 0.108705628;
+				Ct = cos(theta);
+				St = sin(theta);
+				sz_ = sqrt( 1.0 - sz*sz );
+
+				var gx: vec4<f32>;
+				var gy: vec4<f32>;
+				var gz: vec4<f32>;
+				var px: vec4<f32>;
+				var py: vec4<f32>;
+				var pz: vec4<f32>;
+				var Sp: vec4<f32>;
+				var Cp: vec4<f32>;
+				var Ctp: vec4<f32>;
+				var qx: vec4<f32>;
+				var qy: vec4<f32>;
+				var qz: vec4<f32>;
+				var Sa: vec4<f32>;
+				var Ca: vec4<f32>;
+
+				if(alpha != 0.0)
+				{
+					px = Ct * sz_;
+					py = St * sz_;
+					pz = sz;
+					Sp = sin(psi);
+					Cp = cos(psi);
+					Ctp = St*Sp - Ct*Cp;
+					qx = mix( Ctp*St, Sp, sz);
+					qy = mix(-Ctp*Ct, Cp, sz);
+					qz = -(py*Cp + px*Sp);
+					Sa = vec4<f32>(sin(alpha));
+					Ca = vec4<f32>(cos(alpha));
+					gx = Ca*px + Sa*qx;
+					gy = Ca*py + Sa*qy;
+					gz = Ca*pz + Sa*qz;
+				}
+				else
+				{
+					gx = Ct * sz_;
+					gy = St * sz_;
+					gz = sz;  
+				}
+				
+				var g0: vec3<f32>;
+				var g1: vec3<f32>;
+				var g2: vec3<f32>;
+				var g3: vec3<f32>;
+				var w: vec4<f32>;
+				var w2: vec4<f32>;
+				var w3: vec4<f32>;
+				var gdotx: vec4<f32>;
+				var n: f32;
+				
+				g0 = vec3<f32>(gx.x, gy.x, gz.x);
+				g1 = vec3<f32>(gx.y, gy.y, gz.y);
+				g2 = vec3<f32>(gx.z, gy.z, gz.z);
+				g3 = vec3<f32>(gx.w, gy.w, gz.w);
+				w = 0.5 - vec4<f32>(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3));
+				w = max(w, vec4<f32>(0.0, 0.0, 0.0, 0.0));
+				w2 = w * w;
+				w3 = w2 * w;
+				gdotx = vec4<f32>(dot(g0,x0), dot(g1,x1), dot(g2,x2), dot(g3,x3));
+				n = 39.5 * dot(w3, gdotx);
+
+				var dw: vec4<f32> = -6.0 * w2 * gdotx;
+				var dn0: vec3<f32> = w3.x * g0 + dw.x * x0;
+				var dn1: vec3<f32> = w3.y * g1 + dw.y * x1;
+				var dn2: vec3<f32> = w3.z * g2 + dw.z * x2;
+				var dn3: vec3<f32> = w3.w * g3 + dw.w * x3;
+				var g: vec3<f32> = 39.5 * (dn0 + dn1 + dn2 + dn3);
+				
+				return NG3(n, g);
+			}
+			
+			fn simplexNoiseGrad(pos: vec3<f32>, offset: vec3<f32>) -> vec3<f32> {
+				//var grad: vec3<f32>;
+				let periodo: vec3<f32> = vec3<f32>(120.0, 120.0, 120.0);
+				let alfa: f32 = 0.0;
+				let result: NG3 = psrdnoise3(1.0 * (pos + offset), periodo, alfa);
+				//let n: f32 = psrdnoise3(1.0 * (pos + offset), periodo, alfa, grad);
+				return result.gradient;
+			}
+			
+			
+
+			fn pruebas(p: vec3<f32>) -> vec3<f32> {//_aizawa
+				var x: f32 = p.x;
+				var z: f32 = p.y;
+				var y: f32 = p.z;
+				
+				const a2: f32 = 0.95;
+				const b2: f32 = 0.7;
+				const c2: f32 = 0.6;
+				const d2: f32 = 3.5;
+				const e2: f32 = 0.25;
+				const f2: f32 = 0.1;
+
+
+				var dx: f32 = (z - b2) * x - d2 * y;
+				var dy: f32 = d2 * x + (z - b2) * y;
+				var dz: f32 = c2 + a2 * z - (z * z * z) / 3.0 - (x * x + y * y) * (1.0 + e2 * z) + f2 * z * x * x * x;
+
+				return vec3<f32>(dx, dz, dy);
+			}
+			
+			fn pruebas_t(pos: vec3<f32>) -> vec3<f32> {//_thomas
+			
+				const bt: f32 = 0.2;
+				return vec3<f32>(
+					sin(pos.y) - bt * pos.x,
+					sin(pos.z) - bt * pos.y,
+					sin(pos.x) - bt * pos.z
+				);
+			}
+			
+			fn pruebas_holversen(pos: vec3<f32>) -> vec3<f32> { //Holvorsen
+				let x: f32 = pos.x;
+				let y: f32 = pos.y;
+				let z: f32 = pos.z;
+				const a : f32 = 1.4;
+				return vec3<f32>(
+					-a*x - 4*y -4*z - y*y,
+					-a*y - 4*z -4*x - z*z,
+					-a*z - 4*x -4*y - x*x
+				);
+			}
+			
+			fn tsucs(pos: vec3<f32>) -> vec3<f32> { //tsucs
+				let x: f32 = pos.x;
+				let y: f32 = pos.y;
+				let z: f32 = pos.z;
+			
+				const a : f32 = 40.0;
+				const b : f32 = 55.0;
+				const c : f32 = 11.0/6.0;
+				const d : f32 = 0.16;
+				const e : f32 = 0.65;
+				const f : f32 = 20.0;
+				/*
+				const a : f32 = 40.0;
+				const b : f32 = 0.833;
+				//const c : f32 = 11.0/6.0;
+				const d : f32 = 0.5;
+				const e : f32 = 0.65;
+				const f : f32 = 20.0;*/
+				
+				/*Yu Wang, step 0.002
+				const a : f32 = 10.0;
+				const b : f32 = 40.0;
+				const c : f32 =  2.0;
+				const d : f32 =  2.5;
+				a*(y - x),
+					b*x - c*x*z,
+					exp(x*y)- d*z
+				*/
+				
+				return vec3<f32>(
+					//a*(y - x) + d*x*z,
+					//b*x - x*z + f*y,
+					//-e*x*x  + x*y + c*z
+					
+					a*(y - x) + d*x*z,
+					x*z + f*y,
+					-e*x*x  + x*y + b*z
+				);
+			}
+			
+			fn _pruebas(pos: vec3<f32>)-> vec3<f32> {//rabinovichFabrikant
+				let x: f32 = pos.x;
+				let y: f32 = pos.y;
+				let z: f32 = pos.z;
+				
+				//const _alpha: f32 = 0.1;
+				//const _beta : f32 = 0.087;
+				
+				const _alpha: f32 = 0.14;
+				const _beta : f32 = 0.1;
+				
+				return vec3<f32>(
+					y * (z - 1.0 + x * x) + _alpha * x,
+					x * (3.0 * z + 1.0 - x * x) + _alpha * y,
+					-2.0 * z * (_beta + x * y)
+				);
+			}
+
+			// Paso de integración RK4
+			fn rk4(pos: vec3<f32>) -> vec3<f32> {
+			
+				const dt: f32 = 0.01;
+				var k1: vec3<f32> = pruebas(pos);
+				var k2: vec3<f32> = pruebas(pos + 0.5 * dt * k1);
+				var k3: vec3<f32> = pruebas(pos + 0.5 * dt * k2);
+				var k4: vec3<f32> = pruebas(pos + dt * k3);
+				return pos + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+			}
+			
+			fn pruebas4D(pos: vec4<f32>) -> vec4<f32> { //hyperchaos
+				let x: f32 = pos.x;
+				let y: f32 = pos.y;
+				let z: f32 = pos.z;
+				let w: f32 = pos.w;
+				
+				/*
+				const a : f32 = 10.0;
+				const b : f32 = 28.0;
+				const c : f32 =  8.0/3.0;
+				const d : f32 =  1.3;*/
+				//const a : f32 = 1.5;
+				
+				const a : f32 =   0.2;
+				const b : f32 =  -0.01;
+				const c : f32 =   1.0;
+				const d : f32 =  -0.4;
+				const e : f32 =  -1.0;
+				const f : f32 =  -1.0;
+				
+				return vec4<f32>(			
+					/*a*(y-x)+w,
+					-x*z+b*x-y,
+					x*y-c*z,
+					-x*z+d*w*/
+					//Hoover:
+					//y,
+					//-x+y*z,
+					//a-y*y,
+					//1.0
+					//Lu
+					//-y -z,
+					//x+0.25y+w,
+					//3.0+x*z,
+					//-0.5*z+0.05*w
+					//Wang Sun:
+					a*x + c*y*z,
+					b*x + d*y - x*z,
+					e*z + f*x*y,
+					0.0
+					
+					
+					
+				);
+			}
+			
+			fn rk4_4D(pos: vec4<f32>) -> vec4<f32> {
+			
+				const dt: f32 = 0.001;
+				var k1: vec4<f32> = pruebas4D(pos);
+				var k2: vec4<f32> = pruebas4D(pos + 0.5 * dt * k1);
+				var k3: vec4<f32> = pruebas4D(pos + 0.5 * dt * k2);
+				var k4: vec4<f32> = pruebas4D(pos + dt * k3);
+				return pos + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+			}
+
+
+            @group(0) @binding(0) var<storage, read_write> positions: array<vec4f>;
+            //@group(0) @binding(1) var<storage, read_write> velocities: array<vec4f>; 
+            //@group(0) @binding(2) var<uniform> mass: Mass;
+					
+			
+
+            @compute @workgroup_size(${WORKGROUP_SIZE})
+            fn cs(@builtin(global_invocation_id) global_id: vec3u) {
+                let index = global_id.x;
+                let position = positions[index].xyz;
+                //var velocity = velocities[index].xyz;
+
+                /*
+				var massVec = mass.position1.xyz - position;
+                var massDist2 = max(0.01, dot(massVec, massVec));
+                var acceleration = mass.factor1 * normalize(massVec) / massDist2;
+                massVec = mass.position2.xyz - position;
+                massDist2 = max(0.01, dot(massVec, massVec));
+                acceleration += mass.factor2 * normalize(massVec) / massDist2;
+                massVec = mass.position3.xyz - position;
+                massDist2 = max(0.01, dot(massVec, massVec));
+                acceleration += mass.factor3 * normalize(massVec) / massDist2;
+
+                velocity += acceleration;
+                velocity *= 0.9999;
+				*/
+				
+				let deltaTime: f32 = 0.001;
+    
+				var worldPos: vec3<f32> = positions[index].xyz;				
+				/*
+				let radio: f32 = 0.5;
+				if ( length(worldPos) > radio*10.0) {
+					let gradX: vec3<f32> = simplexNoiseGrad(4.0*worldPos, vec3<f32>(0.0, 0.0, 0.0));
+					let gradY: vec3<f32> = simplexNoiseGrad(4.0*worldPos, vec3<f32>(100.737, 1.787, 0.71));
+					let gradZ: vec3<f32> = simplexNoiseGrad(4.0*worldPos, vec3<f32>(10.87837, 41.2327, 9.7864));
+					
+					let curl: vec3<f32> = vec3<f32>(
+						gradZ.y - gradY.z,
+						gradX.z - gradZ.x,
+						gradY.x - gradX.y
+					);
+				//velocity += vec3f(0.0001);
+				worldPos += (curl) * deltaTime;
+				}*/
+				
+				
+				
+				worldPos = rk4(worldPos);
+				
+
+		
+		
+		
+        
+				// Uso simple de velocities para asegurar que el binding no sea eliminado
+				/*let temp = velocities[index];
+				velocities[index] = temp;*/
+		
+				positions[index] = vec4f(worldPos, 1);
+
+                //positions[index] = vec4f(position + velocity, 1);
+                //velocities[index] = vec4f(velocity, 0);
+				
+				/*
+				var worldPos4D: vec4<f32> = positions[index];
+				worldPos4D = rk4_4D(worldPos4D);				
+				positions[index] = worldPos4D;*/
+				
+            }
+
+        `
+
+    const computeShaderModule = device.createShaderModule({
+        code: computecode
+		
+    })
+
+    const computePipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: {
+            module: computeShaderModule,
+            entryPoint: "cs"
+        }
+    });
+
+    //////////////////////////
+    // Compute uniform buffer 
+    //////////////////////////
+	/*
+    const computeUniformData = new Float32Array([
+        Math.random() * 2.0 - 1.0, Math.random() * 2.0 - 1.0, 0, 1.0,          // Mass 1 position
+        Math.random() * 2.0 - 1.0, Math.random() * 2.0 - 1.0, 0, 1.0,          // Mass 2 position
+        Math.random() * 2.0 - 1.0, Math.random() * 2.0 - 1.0, 0, 1.0,          // Mass 3 position
+        Math.random() / 30000, Math.random() / 30000, Math.random() / 30000, 0 // Mass factors
+    ]);
+
+    const computeUniformBuffer = device.createBuffer({
+        size: computeUniformData.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    device.queue.writeBuffer(computeUniformBuffer, 0, computeUniformData);
+	*/
+
+    ////////////////////////
+    // Compute bind group
+    ////////////////////////
+
+    const computeBindGroup = device.createBindGroup({
+        layout: computePipeline.getBindGroupLayout(0),
+        entries: [
+            {
+                binding: 0,
+                resource: {
+                    buffer: positionBuffer
+                }
+            }
+        ]
+    });
+
+    const computePassDescription = {
+        timestampWrites: timer.gpuPassDescriptor("compute")
+    };
+
+    ///////////////////////////////////
+    // Create buffers for render pass
+    ///////////////////////////////////
+	
+	const cubeVertexSize = 4 * 4;
+	const cubeVertexCount = 12;//36 for cube, 12 for tetrehedro;
+
+    const vertexBuffer = device.createBuffer({
+        size: 4*4*cubeVertexCount,	//4bytes por float x 4 elementos por vértice x 36 vértices	//32,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    });
+	
+	const cuboVertices = new Float32Array([
+
+// Face ABC
+  1, 1, 1, 1,     // A
+  1, -1, -1, 1,   // B
+  -1, 1, -1, 1,   // C
+
+  // Face ABD
+  1, 1, 1, 1,     // A
+  1, -1, -1, 1,   // B
+  -1, -1, 1, 1,   // D
+
+  // Face ACD
+  1, 1, 1, 1,     // A
+  -1, 1, -1, 1,   // C
+  -1, -1, 1, 1,   // D
+
+  // Face BCD
+  1, -1, -1, 1,   // B
+  -1, 1, -1, 1,   // C
+  -1, -1, 1, 1    // D
+  /*
+
+1,-1,1,1,
+-1,-1,1,1,
+-1,-1,-1,1,
+1,-1,-1,1,
+1,-1,1,1,
+-1,-1,-1,1,
+
+1,1,1,1,
+1,-1,1,1,
+1,-1,-1,1,
+1,1,-1,1,
+1,1,1,1,
+1,-1,-1,1,
+
+-1,1,1,1,
+1,1,1,1,
+1,1,-1,1,
+-1,1,-1,1,
+-1,1,1,1,
+1,1,-1,1,
+
+-1,-1,1,1,
+-1,1,1,1,
+-1,1,-1,1,
+-1,-1,-1,1,
+-1,-1,1,1,
+-1,1,-1,1,
+
+1,1,1,1,
+-1,1,1,1,
+-1,-1,1,1,
+-1,-1,1,1,
+1,-1,1,1,
+1,1,1,1,
+
+1,-1,-1,1,
+-1,-1,-1,1,
+-1,1,-1,1,
+1,1,-1,1,
+1,-1,-1,1,
+-1,1,-1,1
+/*	
+	// Front face (z = 1)
+  1, 1, 1,1,     // Triangle 1
+  1, -1, 1,1,
+  -1, -1, 1,1,
+  -1, -1, 1,1,   // Triangle 2
+  -1, 1, 1,1,
+  1, 1, 1,1,
+
+  // Back face (z = -1)
+  -1, 1, -1,1,   // Triangle 1
+  -1, -1, -1,1,
+  1, -1, -1,1,
+  1, -1, -1,1,   // Triangle 2
+  1, 1, -1,1,
+  -1, 1, -1,1,
+
+  // Left face (x = -1)
+  -1, 1, 1,1,   // Triangle 1
+  -1, -1, 1,1,
+  -1, -1, -1,1,
+  -1, -1, -1,1,  // Triangle 2
+  -1, 1, -1,1,
+  -1, 1, 1,1,
+
+  // Right face (x = 1)
+  1, 1, -1,1,    // Triangle 1
+  1, -1, -1,1,
+  1, -1, 1,1,
+  1, -1, 1,1,    // Triangle 2
+  1, 1, 1,1,
+  1, 1, -1,1,
+
+  // Top face (y = 1)
+  -1, 1, -1,1,   // Triangle 1
+  1, 1, -1,1,
+  1, 1, 1,1,
+  1, 1, 1,1,     // Triangle 2
+  -1, 1, 1,1,
+  -1, 1, -1,1,
+
+  // Bottom face (y = -1)
+  -1, -1, 1,1,   // Triangle 1
+  1, -1, 1,1,
+  1, -1, -1,1,
+  1, -1, -1,1,   // Triangle 2
+  -1, -1, -1,1,
+  -1, -1, 1,1
+	
+	/*
+   1, -1, 1, 1,
+  -1, -1, 1, 1,
+  -1, -1, -1, 1,
+  1, -1, -1, 1,
+  1, -1, 1, 1,
+  -1, -1, -1, 1,
+
+  1, 1, 1, 1,
+  1, -1, 1, 1,
+  1, -1, -1, 1,
+  1, 1, -1, 1,
+  1, 1, 1, 1,
+  1, -1, -1, 1,
+
+  -1, 1, 1, 1,
+  1, 1, 1, 1,
+  1, 1, -1, 1,
+  -1, 1, -1, 1,
+  -1, 1, 1, 1,
+  1, 1, -1, 1,
+
+  -1, -1, 1, 1,
+  -1, 1, 1, 1,
+  -1, 1, -1, 1,
+  -1, -1, -1, 1,
+  -1, -1, 1, 1,
+  -1, 1, -1, 1,
+
+  1, 1, 1, 1,
+  -1, 1, 1, 1,
+  -1, -1, 1, 1,
+  -1, -1, 1, 1,
+  1, -1, 1, 1,
+  1, 1, 1, 1,
+  
+  */
+	
+	]);
+	
+    device.queue.writeBuffer(vertexBuffer, 0, cuboVertices);
+	/*
+	new Float32Array([
+        /*-1.0, -1.0,
+        1.0, -1.0,
+        -1.0, 1.0,
+        1.0, 1.0*/
+		
+		/*
+  1, -1, 1, 1,
+  -1, -1, 1, 1,
+  -1, -1, -1, 1,
+  1, -1, -1, 1,
+  1, -1, 1, 1,
+  -1, -1, -1, 1,
+
+  1, 1, 1, 1,
+  1, -1, 1, 1,
+  1, -1, -1, 1,
+  1, 1, -1, 1,
+  1, 1, 1, 1,
+  1, -1, -1, 1,
+
+  -1, 1, 1, 1,
+  1, 1, 1, 1,
+  1, 1, -1, 1,
+  -1, 1, -1, 1,
+  -1, 1, 1, 1,
+  1, 1, -1, 1,
+
+  -1, -1, 1, 1,
+  -1, 1, 1, 1,
+  -1, 1, -1, 1,
+  -1, -1, -1, 1,
+  -1, -1, 1, 1,
+  -1, 1, -1, 1,
+
+  1, 1, 1, 1,
+  -1, 1, 1, 1,
+  -1, -1, 1, 1,
+  -1, -1, 1, 1,
+  1, -1, 1, 1,
+  1, 1, 1, 1,		
+    ]));
+	*/
+
+    const colorBuffer = device.createBuffer({
+        size: 4 * NUM_PARTICLES,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    const colorBufferData = new Uint8Array(4 * NUM_PARTICLES);
+    for (let i = 0; i < colorBufferData.length; i += 4) {
+        colorBufferData[i]     = Math.floor(Math.random() * 256);
+        colorBufferData[i + 1] = Math.floor(Math.random() * 256);
+        colorBufferData[i + 2] = Math.floor(Math.random() * 256);
+        colorBufferData[i + 3] = 128;
+    }
+    device.queue.writeBuffer(colorBuffer, 0, colorBufferData);
+
+    /////////////////////////////////
+    // Create render shader module
+    /////////////////////////////////
+	
+	const shaders = `
+
+            /*
+			struct VertexUniforms {
+                screenDimensions: vec2f,
+                particleSize: f32,
+				rotationAngle: f32, // Adding rotation angle
+				modelviewprojectionMatrix: mat4x4f // Adding rotation matrix
+            };*/
+			struct VertexUniforms {
+				modelviewprojectionMatrix: mat4x4f // Adding rotation matrix
+            };
+
+            struct VSOut {
+                @builtin(position) clipPosition: vec4f,
+                @location(0) color: vec4f
+            };
+			
+			struct Tiempo {
+				valor: f32
+			};
+
+            @group(0) @binding(0) var<uniform> vertexUniforms: VertexUniforms;
+			@group(0) @binding(1) var<uniform> time: Tiempo;
+			
+			// Function to create a 4x4 rotation matrix around the Z-axis
+			fn createRotationMatrix(angle: f32) -> mat4x4f {
+				let cosTheta = cos(angle);
+				let sinTheta = sin(angle);
+				
+				/*return mat4x4f(
+					vec4f(cosTheta, -sinTheta, 0.0, 0.0),
+					vec4f(sinTheta, cosTheta, 0.0, 0.0),
+					vec4f(0.0, 0.0, 1.0, 0.0),
+					vec4f(0.0, 0.0, 0.0, 1.0)
+				);*/
+				return mat4x4f(
+					vec4f(cosTheta, 0.0, -sinTheta, 0.0),
+					vec4f(0.0, 1.0, 0.0, 0.0),
+					vec4f(sinTheta, 0.0, cosTheta, 0.0),
+					vec4f(0.0, 0.0, 0.0, 1.0)
+				);
+			}
+			
+			fn quaternionFromAxisAngle(axis: vec3f, angle: f32) -> vec4f {
+				let halfAngle = angle * 0.5;
+				let sinHalfAngle = sin(halfAngle);
+				return vec4f(
+					axis.x * sinHalfAngle,
+					axis.y * sinHalfAngle,
+					axis.z * sinHalfAngle,
+					cos(halfAngle)
+				);
+			}
+
+			fn rotationMatrixFromQuaternion(q: vec4f) -> mat4x4f {
+				let xx = q.x * q.x;
+				let yy = q.y * q.y;
+				let zz = q.z * q.z;
+				let xy = q.x * q.y;
+				let xz = q.x * q.z;
+				let yz = q.y * q.z;
+				let wx = q.w * q.x;
+				let wy = q.w * q.y;
+				let wz = q.w * q.z;
+
+				return mat4x4f(
+					vec4f(1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy), 0.0),
+					vec4f(2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx), 0.0),
+					vec4f(2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy), 0.0),
+					vec4f(0.0, 0.0, 0.0, 1.0)
+				);
+			}
+
+			fn createRotationMatrixQ(axis: vec3f, angle: f32) -> mat4x4f {
+				let normalizedAxis = normalize(axis);
+				let quaternion = quaternionFromAxisAngle(normalizedAxis, angle);
+				return rotationMatrixFromQuaternion(quaternion);
+			}
+			
+			// Function to generate a random float in the range [0, 1)
+			fn randomFloat(seed: f32) -> f32 {
+				var x = fract(sin(seed) * 43758.5453123);
+				return x;
+			}
+
+			// Function to generate a random float in the range [-1, 1)
+			fn randomFloatSigned(seed: f32) -> f32 {
+				return randomFloat(seed) * 2.0 - 1.0;
+			}
+
+			// Function to generate a random unit-length vector
+			fn randomUnitVec3(seed: f32) -> vec3f {
+				var seedX = seed;
+				var seedY = seed + 1.0;
+				var seedZ = seed + 2.0;
+
+				// Generate random components
+				var x = randomFloatSigned(seedX);
+				var y = randomFloatSigned(seedY);
+				var z = randomFloatSigned(seedZ);
+
+				// Create the vector and normalize it to ensure unit length
+				var randomVec = vec3f(x, y, z);
+				return normalize(randomVec);
+			}
+			//*********************************************************1D PERLIN NOISE:
+			// Hash function to generate pseudo-random values
+			
+
+			
+
+
+			
+            @vertex
+            fn vs(
+                @location(0) vertexPosition: vec4f,//vec2f, trying vec3 instead of vec4f
+                @location(1) color: vec4f,
+                @location(2) position: vec3f
+            ) -> VSOut {
+                var vsOut: VSOut;
+				// Apply rotation matrix to the position
+				//let rotatedPosition = vertexUniforms.rotationMatrix * vec4f(position, 1.0);
+				let vertexUniforms_rotationAngle = time.valor;// 0.0;
+				//time.valor += 0.01;
+				let ejex = sin(vertexUniforms_rotationAngle);
+				let ejey = cos(vertexUniforms_rotationAngle);
+				let ejez = 0.0;//cos(vertexUniforms.rotationAngle);
+				
+				// Create rotation matrix from the angle
+				//let _rotationMatrix = createRotationMatrix(vertexUniforms.rotationAngle);//vertexUniforms.rotationAngle
+				let _rotationMatrix = createRotationMatrixQ(vec3f(ejex, ejey, ejez), vertexUniforms_rotationAngle);
+
+				// Apply rotation matrix to the position
+				let rotatedPosition = _rotationMatrix * vec4f(position, 1.0);
+				//let rotatedPosition = vec4f(position, 1.0);//cancel rotation
+				//let rotatedPosition = vec4f(0.0); todas las instancias en la misma ubicacion en el centro 
+
+
+                
+				
+				//vsOut.clipPosition = vec4f(vertexPosition * vertexUniforms.particleSize / vertexUniforms.screenDimensions + position.xy, position.z, 1.0);
+                //vsOut.clipPosition = vec4f(vertexPosition * vertexUniforms.particleSize / vertexUniforms.screenDimensions + rotatedPosition.xy, rotatedPosition.z, 1.0);
+				
+				// Apply orthographic projection to clip space
+				/*
+				let clipX = (vertexPosition.x * vertexUniforms.particleSize / vertexUniforms.screenDimensions.x) + rotatedPosition.x;
+				let clipY = (vertexPosition.y * vertexUniforms.particleSize / vertexUniforms.screenDimensions.y) + rotatedPosition.y;
+				let clipZ = rotatedPosition.z+2.0;
+				let clipW = 1.0; // No perspective divide needed for orthographic projection
+				*/
+				
+				
+				let escala = 0.01;	//escalar el tamaño de cada cubo
+				let clipX = escala*vertexPosition.x + rotatedPosition.x;
+				let clipY = escala*vertexPosition.y + rotatedPosition.y;
+				let clipZ = escala*vertexPosition.z + rotatedPosition.z;
+				let clipW = 1.0;
+
+				
+				//orthographic projection in clip space with no matrix
+				//vsOut.clipPosition = 0.25*vec4f(clipX, clipY, clipZ, 4.0*clipW);
+				//let zoom = 1.0;
+				//vsOut.clipPosition = (1.0/zoom)*vec4f(clipX, clipY, clipZ, zoom*clipW);
+				
+				
+				vsOut.clipPosition = vertexUniforms.modelviewprojectionMatrix*vec4f(clipX, clipY, clipZ, clipW);
+				
+				//vsOut.clipPosition = vertexUniforms.modelviewprojectionMatrix*escala*vertexPosition;//aplica la misma matriz modelviewprojection a los vertices del cubo escalado igual para cada instancia
+				
+				vsOut.color = color;
+
+                return vsOut;
+            }             
+
+            @fragment 
+            fn fs(@location(0) color: vec4f) -> @location(0) vec4f {
+                return vec4f(color.rgb * color.a, color.a);
+            }	
+	`;
+
+    const renderShaderModule = device.createShaderModule({
+        code: shaders
+    });
+
+   
+
+    ///////////////////////////////////////////////
+    // Rendering uniform buffer
+    ///////////////////////////////////////////////
+
+    const vertexUniformBuffer = device.createBuffer({
+        size: 4*16, //16, 81 = 16 +4*4*4
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+	const tmpMatrix_Float32Array = new Float32Array([
+														1,0,0,0,
+														0,1,0,0,
+														0,0,1,0,
+														0,0,0,1	
+													]);
+    
+	
+	device.queue.writeBuffer(vertexUniformBuffer, 0, tmpMatrix_Float32Array.buffer
+													/*new Float32Array([
+																		canvas.width, canvas.height, PARTICLE_SIZE
+																		, 0.0
+																		, tmpFloat32ArrayMatrix																		
+																		])*/
+																		
+	);
+	
+
+	
+	const bindGroupLayout = device.createBindGroupLayout({
+		entries: [
+			{
+				binding: 0,
+				visibility: GPUShaderStage.VERTEX, // Visibilidad en el shader de vértices
+				buffer: {
+					type: 'uniform', // Tipo de buffer (storage buffer)
+				},
+			},{
+				binding: 1,
+				visibility: GPUShaderStage.VERTEX, // Visibilidad en el shader de vértices
+				buffer: {
+					type: 'uniform', // Tipo de buffer (storage buffer)
+				},
+			},
+		],
+	});
+
+
+    const vertexUniformBindGroup = device.createBindGroup({
+        layout: bindGroupLayout,//renderPipeline.getBindGroupLayout(0),//
+        entries: [
+			{
+				binding: 0,
+				resource: {
+					buffer: vertexUniformBuffer
+				}
+			},
+            {
+                binding: 1,
+                resource: {
+                    buffer: timeBuffer
+                }
+            }
+		]
+    });
+	
+	
+	 /////////////////////////////////
+    // Create render pipeline
+    /////////////////////////////////
+	
+	const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout],
+    });
+
+    const renderPipeline = device.createRenderPipeline({
+        layout: pipelineLayout,//"auto",
+        vertex: {
+            module: renderShaderModule,
+            entryPoint: "vs",
+            buffers: [
+                {
+                    arrayStride: cubeVertexSize,	// 4*4,	//4bytes que ocupa un float x 4 elementos float que tiene un vec4f //8,
+                    attributes: [{
+                        shaderLocation: 0,
+                        format: "float32x4",//corregido con chatgpt a float32x4
+                        offset: 0
+                    }]
+                },
+                {
+                    arrayStride: 4,		//1byte per Uint8Array element x 4 elements in a vec4f
+                    stepMode: "instance",
+                    attributes: [{
+                        shaderLocation: 1,
+                        format: "unorm8x4",
+                        offset: 0
+                    }]
+                },
+                {
+                    arrayStride: 16,
+                    stepMode: "instance",
+                    attributes: [{
+                        shaderLocation: 2,
+                        format: "float32x4",
+                        offset: 0
+                    }]
+                }
+            ]
+        },
+        fragment: {
+            module: renderShaderModule,
+            entryPoint: "fs",
+            targets: [{
+                format: presentationFormat,
+                blend: {
+                    color: {
+                        srcFactor: "one",
+                        dstFactor: "one-minus-src-alpha"
+                    },
+                    alpha: {
+                        srcFactor: "one",
+                        dstFactor: "one-minus-src-alpha"
+                    }
+                }
+            }]
+        },
+        multisample: {
+            count: 4
+        },
+        primitive: {
+            topology: "triangle-list",//"triangle-strip",
+            //stripIndexFormat: "uint32"
+			//StripIndexFormat (IndexFormat::Uint32) is not undefined when using a non-strip primitive topology (PrimitiveTopology::TriangleList).
+        }
+    });
+
+
+    ///////////////////////////
+    // Render pass description
+    ///////////////////////////
+
+    let msaaTexture = device.createTexture({
+        label: 'msaa texture',
+        size: [canvas.width, canvas.height],
+        format: presentationFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        sampleCount: 4
+    });
+
+    const renderPassDescription = {
+        colorAttachments: [{
+            view: msaaTexture.createView(),
+            resolveTarget: context.getCurrentTexture().createView(),
+            loadOp: "clear",
+            storeOp: "store",
+            clearValue: [0, 0, 0, 1]
+        }],
+        timestampWrites: timer.gpuPassDescriptor("draw")
+    };
+
+    window.addEventListener("resize", () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        msaaTexture.destroy();
+        msaaTexture = device.createTexture({
+            label: 'msaa texture',
+            size: [canvas.width, canvas.height],
+            format: presentationFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            sampleCount: 4
+        });
+
+        renderPassDescription.colorAttachments[0].view = msaaTexture.createView()
+    });
+	
+	
+	// Function to create a rotation matrix
+	function createRotationMatrix(angle) {
+		const cos = Math.cos(angle);
+		const sin = Math.sin(angle);
+
+		return new Float32Array([
+			//cos, -sin, 0, 0,
+			//sin,  cos, 0, 0,
+			
+			1,    0,   0, 0,
+			0,    1,   0, 0,
+			0,    0,   1, 0,
+			0,    0,   0, 1
+		]);
+	}
+	
+	const aspect = canvas.width / canvas.height;
+	//const projectionMatrix = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0);
+	let modelViewProjectionMatrix = mat4.create();
+	function getTransformationMatrix() {
+		/*const viewMatrix = mat4.identity();
+		mat4.translate(viewMatrix, vec3.fromValues(0, 0, -4), viewMatrix);
+		const now = Date.now() / 1000;
+		mat4.rotate(viewMatrix, vec3.fromValues(Math.sin(now), Math.cos(now), 0), 1, viewMatrix);
+		mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix);
+		return modelViewProjectionMatrix;*/
+		
+		const modelMatrix = mat4.identity(); // Matriz de modelo (inicialmente identidad)
+			//const viewMatrix  = mat4.lookAt(  { eye: [0, 0, 5], target: [0, 0, 0], up: [0, 1, 0] }   ); // Cámara mirando al origen
+										
+		//const viewMatrix = mat4.translation(vec3.fromValues(0, 0, -5));
+		
+		let viewMatrix = mat4.create();
+
+		// Define the camera position (y = 10, at origin in x and z)
+		const cameraPosition = vec3.create(0, 0, 10);
+
+		// Define the target position (looking at the origin)
+		const targetPosition = vec3.create(0, 0, 0);
+
+		// Define the up vector (along the z-axis)
+		const upVector = vec3.create(0, 1, 0);
+
+		// Create the view matrix
+		mat4.lookAt(viewMatrix, cameraPosition, targetPosition, upVector);
+		
+		viewMatrix = mat4.lookAt( cameraPosition, targetPosition, upVector);
+		
+		viewMatrix = mat4.lookAt( [3, 1, 3],  [0, 1, 0],  [0, 1, 0]);
+		//viewMatrix = mat4.lookAt( [0, 5, 1.01],  [0, 0, 1.01],  [0, 0, 1]);//para ver desde el ejey t cabeza hacia el ejez positivo
+
+
+		
+										
+		const projectionMatrix = mat4.perspective(
+			Math.PI / 4, // Campo de visión vertical (en radianes)
+			aspect,   	 // Relación de aspecto (ancho/alto)
+			0.1,         // Plano cercano
+			1000.0        // Plano lejano
+		);
+		
+		// Crear la matriz Model-View-Projection (MVP):
+		const modelViewMatrix = mat4.multiply(viewMatrix, modelMatrix); // view * model
+		return modelViewProjectionMatrix = mat4.multiply(projectionMatrix, modelViewMatrix); // projection * (view * model)		
+	}
+	
+	
+	// Update the uniform buffer with the new rotation matrix
+	function updateUniforms(device, uniformBuffer, screenDimensions, particleSize, time) {
+		const angle = time * 0.001; // Rotate over time
+		//const rotationMatrix = createRotationMatrix(angle);
+		let mvpMatrix = getTransformationMatrix();
+		//mvpMatrix = mat4.identity();
+		
+		
+		//console.log('mvpMatrix Matrix:', mvpMatrix);
+
+		const uniformData = new Float32Array([
+			screenDimensions[0], screenDimensions[1],
+			particleSize
+			, angle
+			, mvpMatrix
+		]);
+		
+		//console.log('uniformData:', uniformData.buffer);
+
+		//device.queue.writeBuffer(uniformBuffer, 0, uniformData.buffer);
+		device.queue.writeBuffer(uniformBuffer, 0, mvpMatrix.buffer);
+		
+		
+
+		const _timeBufferData = new Float32Array([angle]);
+		device.queue.writeBuffer(timeBuffer, 0, _timeBufferData.buffer);
+		//device.queue.writeBuffer(uniformBuffer, 16*4, mvpMatrix.buffer);
+	}
+	
+	// Control orbital
+            let isDragging = false;
+            let previousX = 0;
+            let previousY = 0;
+            let rotationX = 0;
+            let rotationY = 0;
+
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousX = e.clientX;
+                previousY = e.clientY;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - previousX;
+                    const deltaY = e.clientY - previousY;
+                    rotationY += deltaX * 0.005;
+                    rotationX += deltaY * 0.005;
+                    previousX = e.clientX;
+                    previousY = e.clientY;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+    requestAnimationFrame(function draw() {
+        timer.cpuTimeStart("frame");
+		
+		
+
+        /////////////////////////
+        // Set up command buffer
+        /////////////////////////
+
+        const commandEncoder = device.createCommandEncoder();
+
+        ///////////////////////
+        // Encode compute pass
+        ///////////////////////
+
+        const computePass = commandEncoder.beginComputePass(computePassDescription);
+        computePass.setPipeline(computePipeline);
+        computePass.setBindGroup(0, computeBindGroup);
+        computePass.dispatchWorkgroups(NUM_WORKGROUPS);
+        computePass.end();
+
+        ////////////////////////////////
+        // Get current canvas texture
+        ////////////////////////////////
+
+        renderPassDescription.colorAttachments[0].resolveTarget = context.getCurrentTexture().createView();
+
+        ///////////////////////
+        // Encode render pass
+        ///////////////////////
+
+        const renderPass = commandEncoder.beginRenderPass(renderPassDescription);
+        renderPass.setPipeline(renderPipeline);
+
+        // First argument here refers to array index
+        // in renderPipeline vertexState.vertexBuffers
+        renderPass.setVertexBuffer(0, vertexBuffer);
+        renderPass.setVertexBuffer(1, colorBuffer);
+        renderPass.setVertexBuffer(2, positionBuffer);
+        renderPass.setBindGroup(0, vertexUniformBindGroup);
+		const _time = performance.now();
+		updateUniforms(device, vertexUniformBuffer, new Float32Array([canvas.height, canvas.height]), PARTICLE_SIZE, 0.1*(_time -_time - 0.0) );
+        
+        renderPass.draw(cubeVertexCount, NUM_PARTICLES);
+        renderPass.end();
+
+        //////////////////////////
+        // Submit command buffer
+        //////////////////////////
+
+        timer.gpuBeforeSubmit(commandEncoder);
+
+        device.queue.submit([commandEncoder.finish()]);
+
+        timer.gpuAfterSubmit();
+        timer.cpuTimeEnd("frame");
+
+        //cpuTimeDisplay.innerText = `${timer.cpuTimes["frame"].toFixed(2)}ms`;
+        //computeTimeDisplay.innerText = timer.hasGPUTimer ? `${timer.gpuTimes["compute"].toFixed(2)}ms` : "N/A";
+        //drawTimeDisplay.innerText = timer.hasGPUTimer ? `${timer.gpuTimes["draw"].toFixed(2)}ms` : "N/A";
+
+        requestAnimationFrame(draw);
+    });
+})();
+</script>
+</body>
+</html>
